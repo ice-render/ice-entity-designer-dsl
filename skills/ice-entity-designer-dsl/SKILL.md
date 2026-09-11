@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Render Entity-Relation diagrams with ice-entity-designer from a JSON-first ER DSL instead of raw imperative canvas API calls.
-version: "1.0.1"
+version: "1.0.2"
 category: data
 platforms:
   - claude-code
@@ -19,10 +19,40 @@ metadata:
 Use this skill when the user wants an Entity-Relation (ER) model or database
 schema diagram that can be rendered by `ice-entity-designer`.
 
+## Capability boundary
+
+This SKILL is the right choice for:
+
+- entities and database tables
+- fields, primary keys, foreign keys, unique constraints
+- one-to-one / one-to-many / many-to-one / many-to-many relations
+- ER layout and readable database-model diagrams
+- relation labels, cardinalities, referential actions, and join tables
+
+This SKILL should **not** be used for:
+
+- generic flowcharts or topology diagrams: use `ice-render-dsl`
+- React integration, Undo/Redo controls, project snapshots, or TypeORM Schema
+  export APIs: use `ice-entity-designer` imperative or React APIs
+- custom component types, plugins, or accessibility internals: use `ice-render`
+
+## Decision guide
+
+| User intent | Recommended output |
+| --- | --- |
+| Draw an ER / database model | Return an `ice-entity-designer-dsl` JSON document |
+| Draw a generic diagram | Use `ice-render-dsl` |
+| Build an interactive designer with Undo/Redo | Use `ice-entity-designer` imperative API |
+| Embed the designer in React | Use `ice-entity-designer/react` |
+| Generate TypeORM code or schema objects | Use `designer.toSchemaObject()` / `toSchemaString()` |
+
 ## Required output
 
-Return one JSON DSL document, not HTML and not imperative `EntityDesigner` API
-code. The DSL describes the complete ER model.
+Return one JSON DSL document.
+
+- Do not return HTML.
+- Do not return imperative `EntityDesigner` API code.
+- Do not mix generic `ice-render-dsl` nodes into this ER document.
 
 ## Core contract
 
@@ -41,7 +71,7 @@ code. The DSL describes the complete ER model.
 - `layout` controls automatic arrangement.
 - Entity ids must be unique.
 
-## Entity
+## Entity model
 
 ```json
 {
@@ -81,10 +111,15 @@ code. The DSL describes the complete ER model.
 | `comment` | column comment |
 | `generated` | generated column |
 
-Use field flags consistently with the target database schema. Do not invent
-primary keys when the user already provided them.
+Modeling rules:
 
-## Relation
+- Prefer one stable primary key per entity, usually named `id`.
+- Use `autoIncrement: true` for numeric surrogate primary keys.
+- Name foreign-key fields after the referenced entity, e.g. `customerId`.
+- Keep `sourceField` / `targetField` exactly equal to real field names.
+- Prefer `camelCase` for entity and field names.
+
+## Relation model
 
 ```json
 {
@@ -107,37 +142,33 @@ primary keys when the user already provided them.
 }
 ```
 
-### Relation types
+### Relation type cheat sheet
 
-| type | typical direction |
-| --- | --- |
-| `one-to-one` | one source row to one target row |
-| `one-to-many` | one source row to many target rows |
-| `many-to-one` | many source rows to one target row |
-| `many-to-many` | many-to-many, usually requires `joinTableName` |
+| type | default cardinality | typical arrow |
+| --- | --- | --- |
+| `one-to-one` | `1 : 1` | `none` |
+| `one-to-many` | `1 : 0..N` | `end` |
+| `many-to-one` | `0..N : 1` | `start` |
+| `many-to-many` | `0..N : 0..N` | `none`, usually requires `joinTableName` |
+
+Use `sourceCardinality` / `targetCardinality` only to override defaults.
 
 ### Relation styling and routing
 
-- `linkShape`: `visio` (orthogonal connector, default) or `bezier`.
+- `linkShape`: `visio` or `bezier`.
 - `routeType`: `straight` or `orthogonal`.
 - `arrow`: `none`, `start`, `end`, or `both`.
-- `sourceCardinality` and `targetCardinality` are display hints, e.g. `1`,
-  `0..1`, `0..N`, `1..N`.
-- For `many-to-many`, set `joinTableName`; the DSL and designer treat it as a
-  join table.
-- `onDelete` / `onUpdate` accept referential-action strings such as `CASCADE`,
-  `SET NULL`, `NO ACTION`, or `RESTRICT`.
+- `onDelete` / `onUpdate`: `CASCADE`, `SET NULL`, `NO ACTION`, or `RESTRICT`.
+- `many-to-many` relations should set `joinTableName`.
 
 ## Layout
 
 Supported layout values:
 
-- `grid`: grid arrangement.
+- `grid`: grid arrangement, good for many entities.
 - `layered`: layered arrangement, good for parent/child flows.
 - `horizontal`: horizontal layered arrangement.
 - `vertical`: vertical arrangement.
-
-Example:
 
 ```json
 {
@@ -150,8 +181,8 @@ Example:
 }
 ```
 
-When coordinates are already supplied on entities, prefer those coordinates
-unless the user explicitly asks for automatic layout.
+When entity coordinates are supplied, prefer them unless the user explicitly
+asks for automatic layout.
 
 ## Rendering options
 
@@ -159,12 +190,18 @@ unless the user explicitly asks for automatic layout.
 {
   "options": {
     "fitViewport": true,
+    "fitViewportPadding": 48,
     "routeType": "orthogonal",
     "gapX": 120,
     "gapY": 60
   }
 }
 ```
+
+- `fitViewport`: shrink the whole ER model to fit the canvas and center it.
+  It never upscales content.
+- `routeType`: default route type for relations that do not specify their own.
+- `gapX` / `gapY`: spacing used by `layered` and `horizontal`.
 
 ## Validation
 
@@ -179,7 +216,7 @@ Call `validateDsl()` before rendering. The validator checks:
 
 ### Runtime requirements
 
-- Node: installing `ice-entity-designer-dsl@>=0.0.2` automatically installs
+- Node: installing `ice-entity-designer-dsl@>=0.0.3` automatically installs
   `ice-entity-designer`.
 - Browser: load `ice-entity-designer` before `ice-entity-designer-dsl`.
 
@@ -283,12 +320,34 @@ import { renderDsl } from 'ice-entity-designer-dsl';
 }
 ```
 
+## Anti-patterns
+
+Do not:
+
+- put generic diagram nodes in `entities`
+- create relations to entity ids that do not exist
+- specify both fixed coordinates and automatic layout without clear intent
+- add `joinTableName` to non-`many-to-many` relations
+- mix ER fields with generic `ice-render-dsl` fields
+
+## Output checklist
+
+Before returning, verify:
+
+- root contains only `schemaVersion`, `entities`, `relations`, `layout`, and
+  `options`
+- every entity has a unique non-empty `id`
+- every entity has a `fields` array
+- every field has a non-empty `name`
+- every relation references an existing entity id
+- `many-to-many` relations include `joinTableName`
+- the document is valid JSON with no trailing commas
+
 ## Rules
 
 - Always return JSON, never handwritten `EntityDesigner` class constructors.
 - Use stable, semantic entity ids such as `customer`, `order`, and `product`.
-- Model foreign keys explicitly as fields plus a relation, matching common ER
-  tool conventions.
-- Preserve constraints and cardinality when they are supplied by the user.
+- Model foreign keys explicitly as fields plus a relation.
+- Preserve constraints and cardinalities supplied by the user.
 - Use `layered` or `grid` when no coordinates are provided.
 - Validate before rendering with `validateDsl()`.
