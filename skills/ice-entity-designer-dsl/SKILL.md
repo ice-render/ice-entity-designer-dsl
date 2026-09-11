@@ -1,8 +1,15 @@
 ---
 name: ice-entity-designer-dsl
 description: Render Entity-Relation diagrams with ice-entity-designer from a JSON-first ER DSL instead of raw imperative canvas API calls.
-version: "1.0.0"
+version: "1.0.1"
 category: data
+platforms:
+  - claude-code
+  - codex-cli
+  - copilot
+  - cursor
+  - gemini-cli
+  - other
 metadata:
   short-description: JSON-first ER DSL for entities, fields, constraints, relations, and TypeORM-oriented models.
 ---
