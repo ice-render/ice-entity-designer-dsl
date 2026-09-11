@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>ice-render-dsl example</title>
+  <style>
+    body {
+      margin: 0;
+      font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      height: 100vh;
+    }
+    textarea {
+      width: 100%;
+      height: calc(100vh - 60px);
+      box-sizing: border-box;
+      border: 0;
+      border-right: 1px solid #e2e8f0;
+      padding: 12px;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      resize: none;
+    }
+    .preview {
+      padding: 12px;
+      overflow: auto;
+    }
+    button {
+      margin: 8px;
+      padding: 7px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #ffffff;
+    }
+    canvas {
+      display: block;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #ffffff;
+    }
+  </style>
+  <body>
+    <main>
+      <div>
+        <button id="render">渲染</button>
+        <textarea id="dsl">
+{
+  "schemaVersion": 1,
+  "layout": "layered",
+  "entities": [
+    {
+      "id": "customer",
+      "name": "Customer",
+      "fields": [
+        { "name": "id", "type": "number", "primary": true },
+        { "name": "email", "type": "string", "unique": true },
+        { "name": "name", "type": "string" }
+      ]
+    },
+    {
+      "id": "order",
+      "name": "Order",
+      "fields": [
+        { "name": "id", "type": "number", "primary": true },
+        { "name": "customerId", "type": "number", "foreignKey": true },
+        { "name": "status", "type": "string" }
+      ]
+    },
+    {
+      "id": "product",
+      "name": "Product",
+      "fields": [
+        { "name": "id", "type": "number", "primary": true },
+        { "name": "sku", "type": "string", "unique": true },
+        { "name": "price", "type": "decimal" }
+      ]
+    },
+    {
+      "id": "orderItem",
+      "name": "OrderItem",
+      "fields": [
+        { "name": "id", "type": "number", "primary": true },
+        { "name": "orderId", "type": "number", "foreignKey": true },
+        { "name": "productId", "type": "number", "foreignKey": true },
+        { "name": "quantity", "type": "number" }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "source": "customer",
+      "target": "order",
+      "type": "one-to-many",
+      "sourceField": "id",
+      "targetField": "customerId"
+    },
+    {
+      "source": "order",
+      "target": "orderItem",
+      "type": "one-to-many",
+      "sourceField": "id",
+      "targetField": "orderId"
+    },
+    {
+      "source": "product",
+      "target": "orderItem",
+      "type": "one-to-many",
+      "sourceField": "id",
+      "targetField": "productId"
+    }
+  ]
+}
+        </textarea>
+      </div>
+      <div class="preview">
+        <canvas id="canvas" width="1200" height="800"></canvas>
+      </div>
+    </main>
+
+    <script src="../node_modules/ice-entity-designer/dist/index.umd.js"></script>
+    <script src="../dist/index.umd.js"></script>
+    <script>
+      const textarea = document.getElementById('dsl');
+      document.getElementById('render').addEventListener('click', () => {
+        const oldCanvas = document.getElementById('canvas');
+        const nextCanvas = oldCanvas.cloneNode(false);
+        oldCanvas.parentNode.replaceChild(nextCanvas, oldCanvas);
+        try {
+          window.__dslResult = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
+        } catch (error) {
+          alert(error.message);
+        }
+      });
+      window.__dslResult = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
+    </script>
+  </body>
+</html>
