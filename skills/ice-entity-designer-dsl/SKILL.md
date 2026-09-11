@@ -1,6 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Render ER diagrams with ice-entity-designer using a JSON-first DSL instead of raw canvas API calls.
+version: "1.0.0"
 metadata:
   short-description: JSON-first DSL for ice-entity-designer ER diagrams.
 ---
