@@ -1,11 +1,13 @@
 ---
 name: ice-entity-designer-dsl
 description: Render ER diagrams with ice-entity-designer using a JSON-first DSL instead of raw canvas API calls.
+metadata:
+  short-description: JSON-first DSL for ice-entity-designer ER diagrams.
 ---
 
-# ice-render-dsl
+# ice-entity-designer-dsl
 
-Use this skill when the user wants to render Entity/Relation diagrams with `ice-render`.
+Use this skill when the user wants to render Entity/Relation diagrams with `ice-entity-designer`.
 
 ## Required output
 
@@ -63,7 +65,7 @@ ICEDSL.renderDsl('canvas', dsl);
 Node:
 
 ```ts
-import { renderDsl } from 'ice-render-dsl';
+import { renderDsl } from 'ice-entity-designer-dsl';
 ```
 
 Do not invent coordinates unless explicitly requested.
