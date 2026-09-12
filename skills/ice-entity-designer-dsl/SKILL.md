@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
-description: Generate JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, or UML class diagrams) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.3.2"
+description: Generate JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, or statecharts) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
+version: "1.3.3"
 category: data
 platforms:
   - claude-code
@@ -11,7 +11,7 @@ platforms:
   - gemini-cli
   - other
 metadata:
-  short-description: JSON-first ER + flowchart + BPMN 2.0 + UML class diagram DSL, plus canonical interactive ice-entity-designer editor demo guidance.
+  short-description: JSON-first ER + flowchart + BPMN 2.0 + UML class diagram + statechart DSL, plus canonical interactive ice-entity-designer editor demo guidance.
 ---
 
 # ice-entity-designer-dsl
@@ -1443,6 +1443,79 @@ For aggregation/composition the diamond sits on the **source** (the whole).
   document readable (10-20 classes).
 - Forgetting `«interface»`: an interface is `kind: 'interface'`, not a class named
   "IUser".
+
+## Statechart DSL
+
+Use this mode when the artifact is a **state machine / lifecycle**: order or payment
+lifecycles, device/session states, workflow stages, protocol state machines. Nodes are
+pseudo-states (initial/final), states and **composite states**; edges are transitions
+labelled `event [guard] / action`.
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "kind": "statechart",
+  "nodes": [
+    { "id": "start", "kind": "initial" },
+    { "id": "pending", "title": "待支付" },
+    { "id": "processing", "kind": "composite", "title": "订单处理" },
+    { "id": "stock", "title": "库存校验", "parent": "processing" },
+    { "id": "done", "kind": "final" }
+  ],
+  "edges": [
+    { "source": "start", "target": "pending" },
+    { "source": "pending", "target": "stock", "event": "支付成功", "guard": "金额 > 0", "action": "生成订单" },
+    { "source": "stock", "target": "done", "event": "已发货" }
+  ],
+  "options": { "fitViewport": true }
+}
+```
+
+### Node kinds
+
+| `kind` | Renders as |
+| --- | --- |
+| `initial` | filled dot (pseudo-state, no label) |
+| `final` | bullseye ring (pseudo-state, no label) |
+| `state` | rounded rectangle with the name (default) |
+| `composite` | container: children declared with `parent` live inside; dragging it moves them |
+
+### Transitions
+
+| Field | Meaning |
+| --- | --- |
+| `source` / `target` | state ids; both must exist |
+| `event` | trigger, e.g. `支付成功` |
+| `guard` | condition, rendered as `[guard]` |
+| `action` | effect, rendered after `/` |
+| `label` | explicit label; when present it wins over the composed one |
+
+Labels are composed automatically: `event [guard] / action` with missing parts omitted
+(no empty brackets, no dangling slash).
+
+### Layout, validation, rendering
+
+- Coordinates are optional: the flow is laid out **left to right** (transitions lift to
+  the enclosing composite so the order stays right), and composite states grow to fit
+  their children.
+- `validateDsl()` checks structure (ids, kinds, parent must be a composite, endpoints);
+  semantics live in the designer — `result.designer.validateStatechart()` reports a
+  missing initial state, out-edges from a final state, isolated states and states
+  unreachable from the initial one (a composite counts as reachable when its children are).
+- `ICEDSL.renderDsl('canvas', chartDoc)` → `{ kind: 'statechart', designer: StatechartDesigner }`.
+- Prefer a statechart over a flowchart when the artifact is a **lifecycle with retries /
+  cancellation / nested phases**: pseudo-states and guards say things a flowchart cannot.
+- A JSON-editor plus live preview page lives in `examples/statechart-dsl.html`.
+
+### Statechart anti-patterns
+
+- Modeling a lifecycle as a flowchart with "start/end" boxes: the initial/final
+  pseudo-states and guards carry meaning the validator can check.
+- Writing the transition label by hand in three places: use `event` / `guard` / `action`
+  and let the renderer compose.
+- Nesting states without a composite: only `kind: "composite"` accepts `parent`.
+- Forgetting the final state: a lifecycle usually has completion; `validateStatechart()`
+  will not flag a missing final, but the reviewer will.
 
 ## Worked example: compact e-commerce model
 

@@ -19,7 +19,7 @@
     "types:check": "tsc --noEmit"
   },
   "dependencies": {
-    "ice-entity-designer": "^0.0.24"
+    "ice-entity-designer": "^0.0.25"
   },
   "devDependencies": {
     "@babel/core": "7.17.8",

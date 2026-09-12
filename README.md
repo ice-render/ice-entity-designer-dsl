@@ -14,6 +14,10 @@ One document kind, three shapes:
   enums with free-text members (`- id: string`, `+ pay(): void`), plus the six relation
   kinds (inheritance / realization / association / aggregation / composition /
   dependency). Coordinates are optional — inheritance drives a top-down layering.
+- **Statechart** (`kind: "statechart"` with `nodes` / `edges`): initial/final pseudo-states,
+  states, **composite states** (containers — children follow when you drag the parent) and
+  transitions labelled `event [guard] / action`. Coordinates are optional — the flow lays
+  out left to right.
 
 The package contains:
 
@@ -22,7 +26,8 @@ The package contains:
 - compilers from DSL to Entity/Relation or FlowNode/FlowEdge props (shared layered layout)
 - browser runtime that renders DSL through `ice-entity-designer`
 - browser examples with a JSON editor (`examples/entity-editor-dsl.html`,
-  `examples/flowchart-dsl.html`, `examples/bpmn-dsl.html`, `examples/uml-dsl.html`)
+  `examples/flowchart-dsl.html`, `examples/bpmn-dsl.html`, `examples/uml-dsl.html`,
+  `examples/statechart-dsl.html`)
 
 ## Install
 
@@ -129,6 +134,38 @@ const xml = IED.toBpmnXml(result.designer); // BPMN 2.0 + BPMNDI（互操作格�
 const svg = result.designer.toSvg();        // 矢量 SVG（与画布同一口径，放大不糊）
 ```
 
+### Statechart usage
+
+```js
+const chart = {
+  schemaVersion: 1,
+  kind: 'statechart',
+  nodes: [
+    { id: 'start', kind: 'initial' },
+    { id: 'pending', title: '待支付' },
+    { id: 'paid', title: '已支付' },
+    { id: 'processing', kind: 'composite', title: '订单处理' },
+    { id: 'stock', title: '库存校验', parent: 'processing' },   // 子状态：进复合状态
+    { id: 'done', kind: 'final' },
+  ],
+  edges: [
+    { source: 'start', target: 'pending' },
+    { source: 'pending', target: 'paid', event: '支付成功', guard: '金额 > 0', action: '生成订单' },
+    { source: 'paid', target: 'stock', event: '进入处理' },
+    { source: 'stock', target: 'done', event: '已发货' },
+  ],
+};
+
+const result = ICEDSL.renderDsl('canvas', chart);
+// result.kind === 'statechart'; result.designer is a StatechartDesigner
+result.designer.validateStatechart();  // 缺初始状态 / 终态出边 / 孤立节点 / 不可达
+result.designer.toSvg();               // 矢量导出（实心箭头也是填充路径）
+```
+
+Node kinds: `initial` (filled dot) / `final` (bullseye) / `state` (rounded box, default) /
+`composite` (container; children declared with `parent`). Transition labels are composed
+from `event` / `guard` / `action` (missing parts are omitted).
+
 ### UML usage
 
 ```js
@@ -169,11 +206,12 @@ intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / paral
 
 ## API
 
-- `validateDsl(dsl)` —— ER / flowchart / BPMN / UML documents (dispatches on `kind`); `validateFlowDsl(dsl)` / `validateBpmnDsl(dsl)` / `validateUmlDsl(dsl)` for one kind only
+- `validateDsl(dsl)` —— ER / flowchart / BPMN / UML / statechart documents (dispatches on `kind`); `validateFlowDsl(dsl)` / `validateBpmnDsl(dsl)` / `validateUmlDsl(dsl)` / `validateStatechartDsl(dsl)` for one kind only
 - `compileDsl(dsl)` —— ER document → `Entity` / `Relation` props
 - `compileFlowDsl(dsl)` —— flowchart document → `FlowNode` / `FlowEdge` props (with layered auto-layout)
 - `compileBpmnDsl(dsl)` —— BPMN document → `FlowNode` / `FlowEdge` props (container auto-geometry + container-scoped auto-layout)
 - `compileUmlDsl(dsl)` —— UML document → `UmlClass` / `UmlRelation` props (inheritance-driven layering)
+- `compileStatechartDsl(dsl)` —— statechart document → `StateNode` / `StateTransition` props (flow layering + composite auto-sizing)
 - `layeredLayout(items, edges, options)` —— the shared layered layout (`direction: "vertical" | "horizontal"`)
 - `renderDsl(canvasOrId, dsl)` —— renders any kind, returns `{ kind, ice, designer }`
 - Export: `result.designer.toSvg(options)` (flowchart / BPMN) or `IED.exportSvg(result.ice, options)`; `options` = `{ area: 'content' | 'viewport', padding, scale, background, includeTools }`. The SVG is regenerated from the component tree + path commands, so it matches the canvas (geometry, styles, opacity, shadows, link labels) and can be rasterised to PNG/PDF by any external tool.
@@ -182,7 +220,8 @@ intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / paral
 ## Example
 
 Open `examples/entity-editor-dsl.html` (ER), `examples/flowchart-dsl.html`
-(flowchart), `examples/bpmn-dsl.html` (BPMN) or `examples/uml-dsl.html` (UML) after building.
+(flowchart), `examples/bpmn-dsl.html` (BPMN), `examples/uml-dsl.html` (UML) or
+`examples/statechart-dsl.html` (statechart) after building.
 
 ## Agent discovery
 

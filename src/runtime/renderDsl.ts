@@ -1,10 +1,26 @@
-import { ICE, EntityDesigner, ICELayeredLayout, FlowDesigner, BpmnDesigner, UmlDesigner } from 'ice-entity-designer';
-import { isBpmnDsl, isFlowDsl, isUmlDsl } from '../types';
-import type { DslBpmnDocument, DslDocument, DslErDocument, DslFlowDocument, DslUmlDocument } from '../types';
+import {
+  ICE,
+  EntityDesigner,
+  ICELayeredLayout,
+  FlowDesigner,
+  BpmnDesigner,
+  UmlDesigner,
+  StatechartDesigner,
+} from 'ice-entity-designer';
+import { isBpmnDsl, isFlowDsl, isUmlDsl, isStatechartDsl } from '../types';
+import type {
+  DslBpmnDocument,
+  DslDocument,
+  DslErDocument,
+  DslFlowDocument,
+  DslStatechartDocument,
+  DslUmlDocument,
+} from '../types';
 import { compileDsl } from '../compiler/dslToScene';
 import { compileFlowDsl } from '../compiler/flowToScene';
 import { compileBpmnDsl } from '../compiler/bpmnToScene';
 import { compileUmlDsl } from '../compiler/umlToScene';
+import { compileStatechartDsl } from '../compiler/statechartToScene';
 import { validateDsl } from '../validate';
 
 export type RenderErDslResult = {
@@ -31,11 +47,18 @@ export type RenderUmlDslResult = {
   designer: any;
 };
 
+export type RenderStatechartDslResult = {
+  kind: 'statechart';
+  ice: any;
+  designer: any;
+};
+
 export type RenderDslResult =
   | RenderErDslResult
   | RenderFlowDslResult
   | RenderBpmnDslResult
-  | RenderUmlDslResult;
+  | RenderUmlDslResult
+  | RenderStatechartDslResult;
 
 function positionLinks(designer: any, scene: any, defaultRouteType: string): any[] {
   const entityBox = new Map();
@@ -114,6 +137,9 @@ export function renderDsl(canvasOrId: any, dsl: DslDocument): RenderDslResult {
   if (!validation.valid) {
     throw new Error(validation.errors.join('\n'));
   }
+  if (isStatechartDsl(dsl)) {
+    return renderStatechartDsl(canvasOrId, dsl);
+  }
   if (isUmlDsl(dsl)) {
     return renderUmlDsl(canvasOrId, dsl);
   }
@@ -124,6 +150,42 @@ export function renderDsl(canvasOrId: any, dsl: DslDocument): RenderDslResult {
     return renderFlowDsl(canvasOrId, dsl);
   }
   return renderErDsl(canvasOrId, dsl as DslErDocument);
+}
+
+/**
+ * 渲染状态机文档：伪状态 / 状态 / 复合状态（容器）+ 转移。
+ *
+ * 语义校验用 `designer.validateStatechart()`；矢量导出用 `designer.toSvg()`。
+ */
+export function renderStatechartDsl(canvasOrId: any, dsl: DslStatechartDocument): RenderStatechartDslResult {
+  const scene = compileStatechartDsl(dsl);
+  const options: any = scene.options || {};
+  const ice: any = new ICE().init(canvasOrId);
+  const designer: any = new StatechartDesigner(ice);
+
+  scene.nodes.forEach((node: any) => {
+    designer.createState({
+      id: node.id,
+      kind: node.kind,
+      title: node.title,
+      left: node.left,
+      top: node.top,
+      width: node.width,
+      height: node.height,
+    });
+  });
+  scene.edges.forEach((edge: any) => {
+    designer.createTransition(edge);
+  });
+  designer.select(null);
+
+  if (options.viewport) {
+    ice.setViewport(options.viewport.scale, options.viewport.tx, options.viewport.ty);
+  } else if (options.fitViewport !== false) {
+    designer.fitViewport(options.fitViewportPadding);
+  }
+  designer.resetHistory();
+  return { kind: 'statechart', ice, designer };
 }
 
 /**

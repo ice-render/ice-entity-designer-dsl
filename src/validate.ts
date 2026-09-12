@@ -1,6 +1,7 @@
-import { isBpmnDsl, isFlowDsl, isUmlDsl } from './types';
+import { isBpmnDsl, isFlowDsl, isUmlDsl, isStatechartDsl } from './types';
 import type {
   DslBpmnDocument,
+  DslStatechartDocument,
   DslUmlDocument,
   DslDocument,
   DslFlowDocument,
@@ -30,6 +31,7 @@ const BPMN_GATEWAY_TYPES = ['exclusive', 'parallel', 'inclusive', 'event'];
 const BPMN_TASK_TYPES = ['none', 'user', 'service', 'script', 'send', 'receive', 'manual'];
 const BPMN_FLOW_TYPES = ['sequence', 'message', 'association'];
 
+const STATECHART_NODE_KINDS = ['initial', 'final', 'state', 'composite'];
 const UML_NODE_KINDS = ['class', 'interface', 'enum'];
 const UML_RELATION_TYPES = ['inheritance', 'realization', 'association', 'aggregation', 'composition', 'dependency'];
 
@@ -38,6 +40,9 @@ const UML_RELATION_TYPES = ['inheritance', 'realization', 'association', 'aggreg
  * 或 BPMN（kind: 'bpmn'，nodes/edges + 池/泳道容器）。
  */
 export function validateDsl(dsl: DslDocument): DslValidationResult {
+  if (isStatechartDsl(dsl)) {
+    return validateStatechartDsl(dsl);
+  }
   if (isUmlDsl(dsl)) {
     return validateUmlDsl(dsl);
   }
@@ -316,6 +321,93 @@ export function validateUmlDsl(dsl: DslUmlDocument): DslValidationResult {
       if (edge.label !== undefined && typeof edge.label !== 'string') {
         errors.push(`${prefix}.label must be a string when present`);
       }
+    });
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * 状态机文档校验：结构 + 词汇表 + 端点存在 + parent 合法性（子状态只能挂复合状态）。
+ * 语义检查（初始状态、终态出边、可达性）交给 `StatechartDesigner.validateStatechart()`。
+ */
+export function validateStatechartDsl(dsl: DslStatechartDocument): DslValidationResult {
+  const errors: string[] = [];
+  if (!dsl || typeof dsl !== 'object' || Array.isArray(dsl)) {
+    return { valid: false, errors: ['DSL root must be an object'] };
+  }
+  if (dsl.schemaVersion !== undefined && dsl.schemaVersion !== DSL_SCHEMA_VERSION) {
+    errors.push(`Unsupported schemaVersion: ${dsl.schemaVersion}`);
+  }
+
+  const ids = new Set<string>();
+  const kinds = new Map<string, string>();
+  if (!Array.isArray(dsl.nodes)) {
+    errors.push('nodes must be an array');
+  } else {
+    dsl.nodes.forEach((node, index) => {
+      const prefix = `nodes[${index}]`;
+      if (!node || typeof node !== 'object') {
+        errors.push(`${prefix} must be an object`);
+        return;
+      }
+      if (typeof node.id !== 'string' || !node.id.trim()) {
+        errors.push(`${prefix}.id must be a non-empty string`);
+      } else if (ids.has(node.id)) {
+        errors.push(`${prefix}.id is duplicated: ${node.id}`);
+      } else {
+        ids.add(node.id);
+        kinds.set(node.id, node.kind || 'state');
+      }
+      if (node.kind !== undefined && STATECHART_NODE_KINDS.indexOf(node.kind) === -1) {
+        errors.push(`${prefix}.kind must be one of ${STATECHART_NODE_KINDS.join('/')}`);
+      }
+      ['left', 'top', 'width', 'height'].forEach((key) => {
+        const value = (node as any)[key];
+        if (value !== undefined && typeof value !== 'number') {
+          errors.push(`${prefix}.${key} must be a number when present`);
+        }
+      });
+    });
+    dsl.nodes.forEach((node, index) => {
+      if (!node || typeof node !== 'object' || node.parent === undefined) {
+        return;
+      }
+      const prefix = `nodes[${index}]`;
+      if (typeof node.parent !== 'string' || !node.parent.trim() || !ids.has(node.parent)) {
+        errors.push(`${prefix}.parent must reference an existing node id`);
+        return;
+      }
+      if (node.parent === node.id) {
+        errors.push(`${prefix}.parent must not reference itself`);
+        return;
+      }
+      if (kinds.get(node.parent) !== 'composite') {
+        errors.push(`${prefix}.parent must reference a composite state`);
+      }
+    });
+  }
+
+  if (dsl.edges !== undefined && !Array.isArray(dsl.edges)) {
+    errors.push('edges must be an array when present');
+  } else {
+    (dsl.edges || []).forEach((edge, index) => {
+      const prefix = `edges[${index}]`;
+      if (!edge || typeof edge !== 'object') {
+        errors.push(`${prefix} must be an object`);
+        return;
+      }
+      if (typeof edge.source !== 'string' || !edge.source.trim() || !ids.has(edge.source)) {
+        errors.push(`${prefix}.source must reference an existing node id`);
+      }
+      if (typeof edge.target !== 'string' || !edge.target.trim() || !ids.has(edge.target)) {
+        errors.push(`${prefix}.target must reference an existing node id`);
+      }
+      ['event', 'guard', 'action', 'label'].forEach((key) => {
+        const value = (edge as any)[key];
+        if (value !== undefined && typeof value !== 'string') {
+          errors.push(`${prefix}.${key} must be a string when present`);
+        }
+      });
     });
   }
   return { valid: errors.length === 0, errors };

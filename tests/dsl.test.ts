@@ -1,5 +1,7 @@
 import {
   validateDsl,
+  compileStatechartDsl,
+  isStatechartDsl,
   compileDsl,
   compileFlowDsl,
   compileBpmnDsl,
@@ -412,5 +414,92 @@ describe('ice-entity-designer-dsl · UML 类图文档', () => {
       [120, 80],
       [500, 80],
     ]);
+  });
+});
+
+describe('ice-entity-designer-dsl · 状态机文档', () => {
+  const orderStatechart = {
+    schemaVersion: 1,
+    kind: 'statechart' as const,
+    nodes: [
+      { id: 'start', kind: 'initial' as const },
+      { id: 'pending', title: '待支付' },
+      { id: 'paid', title: '已支付' },
+      { id: 'processing', kind: 'composite' as const, title: '订单处理' },
+      { id: 'stock', title: '库存校验', parent: 'processing' },
+      { id: 'ship', title: '安排发货', parent: 'processing' },
+      { id: 'done', kind: 'final' as const },
+    ],
+    edges: [
+      { source: 'start', target: 'pending' },
+      { source: 'pending', target: 'paid', event: '支付成功', guard: '金额 > 0', action: '生成订单' },
+      { source: 'paid', target: 'stock', event: '进入处理' },
+      { source: 'stock', target: 'ship', event: '库存充足' },
+      { source: 'ship', target: 'done', event: '已发货' },
+    ],
+  };
+
+  it('识别并校验最小状态机文档', () => {
+    expect(isStatechartDsl(orderStatechart)).toBe(true);
+    expect(validateDsl(orderStatechart)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('拒绝重复 id、非法 kind、非法 parent（只能挂复合状态）与悬空端点', () => {
+    const result = validateDsl({
+      kind: 'statechart',
+      nodes: [
+        { id: 'a', kind: 'initial' },
+        { id: 'a', kind: 'pseudo' },
+        { id: 'b', parent: 'ghost' },
+        { id: 'c', parent: 'a' },
+      ],
+      edges: [{ source: 'a', target: 'ghost' }],
+    } as any);
+    expect(result.valid).toBe(false);
+    const message = result.errors.join('\n');
+    expect(message).toContain('duplicated');
+    expect(message).toContain('nodes[1].kind');
+    expect(message).toContain('nodes[2].parent must reference an existing node id');
+    expect(message).toContain('nodes[3].parent must reference a composite state');
+    expect(message).toContain('edges[0].target');
+  });
+
+  it('编译：转移标签三段式、子状态被放进复合状态（绝对坐标）、根级按流向横向排布', () => {
+    const scene = compileStatechartDsl(orderStatechart);
+    expect(scene.kind).toBe('statechart');
+    const byId = new Map(scene.nodes.map((node) => [node.id, node]));
+    const composite = byId.get('processing')!;
+    const stock = byId.get('stock')!;
+    const ship = byId.get('ship')!;
+
+    // 子状态落在复合状态的框内（绝对坐标：复合状态左上角 + 内边距）
+    expect(stock.left).toBeGreaterThan(composite.left);
+    expect(stock.left).toBeLessThan(composite.left + composite.width);
+    expect(stock.top).toBeGreaterThan(composite.top);
+    expect(ship.left).toBeGreaterThan(stock.left);
+    // 复合状态按内容自适应：装得下两个子状态
+    expect(composite.width).toBeGreaterThanOrEqual(ship.left + ship.width - composite.left);
+
+    // 根级沿转移流自左而右（start → pending → paid → done）
+    expect(byId.get('pending')!.left).toBeGreaterThan(byId.get('start')!.left);
+    expect(byId.get('paid')!.left).toBeGreaterThan(byId.get('pending')!.left);
+    expect(byId.get('done')!.left).toBeGreaterThan(byId.get('paid')!.left);
+
+    // 标签三段式原样传递（由 StateTransition 拼）
+    const pay = scene.edges.find((edge) => edge.id === 'transition-1')!;
+    expect(pay).toMatchObject({ event: '支付成功', guard: '金额 > 0', action: '生成订单' });
+  });
+
+  it('给了坐标就是恒等编译（子状态坐标按绝对理解）', () => {
+    const scene = compileStatechartDsl({
+      kind: 'statechart',
+      nodes: [
+        { id: 'c', kind: 'composite', left: 100, top: 100, width: 400, height: 300 },
+        { id: 's', title: '子', parent: 'c', left: 160, top: 180 },
+      ],
+    });
+    const byId = new Map(scene.nodes.map((node) => [node.id, node]));
+    expect(byId.get('s')).toMatchObject({ left: 160, top: 180 });
+    expect(byId.get('c')).toMatchObject({ left: 100, top: 100 });
   });
 });

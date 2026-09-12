@@ -228,8 +228,13 @@ export type DslBpmnDocument = {
   options?: DslBpmnDocumentOptions;
 };
 
-/** 一份 DSL 文档：ER（默认）、流程图（kind: 'flowchart'）、BPMN（kind: 'bpmn'）或 UML（kind: 'uml'） */
-export type DslDocument = DslErDocument | DslFlowDocument | DslBpmnDocument | DslUmlDocument;
+/** 一份 DSL 文档：ER（默认）、流程图、BPMN、UML 或 状态机 */
+export type DslDocument =
+  | DslErDocument
+  | DslFlowDocument
+  | DslBpmnDocument
+  | DslUmlDocument
+  | DslStatechartDocument;
 
 export type DslValidationResult = {
   valid: boolean;
@@ -315,4 +320,65 @@ export type DslUmlDocument = {
 /** 运行时判别：带 kind: 'uml' 的按类图文档处理 */
 export function isUmlDsl(dsl: any): dsl is DslUmlDocument {
   return !!dsl && typeof dsl === 'object' && dsl.kind === 'uml';
+}
+
+/* ------------------------------------------------------------------------- *
+ * 状态机文档（kind: 'statechart'）
+ *
+ * 节点 = 伪状态 / 状态 / 复合状态（复合状态是容器，子状态用 parent 声明归属）；
+ * 连线 = 转移，标签是 `事件 [守卫] / 动作`。
+ * ------------------------------------------------------------------------- */
+
+export type DslStatechartNodeKind = 'initial' | 'final' | 'state' | 'composite';
+
+export type DslStatechartNode = {
+  id: string;
+  /** 节点类型，默认 state */
+  kind?: DslStatechartNodeKind;
+  /** 状态名（title / name 二者取一） */
+  title?: string;
+  name?: string;
+  /** 归属容器：子状态写所属复合状态的 id；缺省时按坐标自动嵌套 */
+  parent?: string;
+  left?: number;
+  top?: number;
+  width?: number;
+  height?: number;
+};
+
+export type DslStatechartEdge = {
+  id?: string;
+  source: string;
+  target: string;
+  /** 触发事件 */
+  event?: string;
+  /** 守卫条件（画成 `[guard]`） */
+  guard?: string;
+  /** 动作（画成 `/ action`） */
+  action?: string;
+  /** 显式标签（给了就不由 event/guard/action 拼） */
+  label?: string;
+};
+
+export type DslStatechartDocumentOptions = {
+  fitViewport?: boolean;
+  fitViewportPadding?: number;
+  viewport?: { scale: number; tx: number; ty: number };
+  /** 缺坐标时是否自动排布（转移流向自左而右），默认 auto */
+  layout?: 'auto' | 'none';
+  gapX?: number;
+  gapY?: number;
+};
+
+export type DslStatechartDocument = {
+  schemaVersion?: number;
+  kind: 'statechart';
+  nodes: DslStatechartNode[];
+  edges?: DslStatechartEdge[];
+  options?: DslStatechartDocumentOptions;
+};
+
+/** 运行时判别：带 kind: 'statechart' 的按状态机文档处理 */
+export function isStatechartDsl(dsl: any): dsl is DslStatechartDocument {
+  return !!dsl && typeof dsl === 'object' && dsl.kind === 'statechart';
 }

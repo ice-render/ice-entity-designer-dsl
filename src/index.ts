@@ -1,5 +1,12 @@
 export * from './types';
-export { DSL_SCHEMA_VERSION, validateDsl, validateFlowDsl, validateBpmnDsl, validateUmlDsl } from './validate';
+export {
+  DSL_SCHEMA_VERSION,
+  validateDsl,
+  validateFlowDsl,
+  validateBpmnDsl,
+  validateUmlDsl,
+  validateStatechartDsl,
+} from './validate';
 export { compileDsl } from './compiler/dslToScene';
 export type { CompiledScene } from './compiler/dslToScene';
 export { compileFlowDsl } from './compiler/flowToScene';
@@ -10,11 +17,14 @@ export { layeredLayout } from './compiler/layout';
 export type { LayoutItem, LayoutEdge, LayoutOptions } from './compiler/layout';
 export { compileUmlDsl } from './compiler/umlToScene';
 export type { CompiledUmlScene, CompiledUmlNode, CompiledUmlEdge } from './compiler/umlToScene';
-export { renderDsl, renderFlowDsl, renderBpmnDsl, renderUmlDsl } from './runtime/renderDsl';
+export { compileStatechartDsl } from './compiler/statechartToScene';
+export type { CompiledStatechartScene, CompiledStatechartNode, CompiledStatechartEdge } from './compiler/statechartToScene';
+export { renderDsl, renderFlowDsl, renderBpmnDsl, renderUmlDsl, renderStatechartDsl } from './runtime/renderDsl';
 export type {
   RenderDslResult,
   RenderErDslResult,
   RenderFlowDslResult,
   RenderBpmnDslResult,
   RenderUmlDslResult,
+  RenderStatechartDslResult,
 } from './runtime/renderDsl';
