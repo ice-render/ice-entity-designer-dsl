@@ -2,7 +2,7 @@
 
 JSON-first DSL for AI agents to drive `ice-entity-designer` without learning the imperative canvas API.
 
-One document kind, three shapes:
+One JSON DSL, seven document kinds — the same document drives rendering, validation and export:
 
 - **ER document** (`entities` / `relations`): entity-relation models and database schemas.
 - **Flowchart document** (`kind: "flowchart"` with `nodes` / `edges`): process flows,
@@ -21,30 +21,34 @@ One document kind, three shapes:
   states, **composite states** (containers — children follow when you drag the parent) and
   transitions labelled `event [guard] / action`. Coordinates are optional — the flow lays
   out left to right.
+- **Power document** (`kind: "power"`): one-line diagrams — equipment kinds mirror
+  `ice-entity-designer`'s power pack, `attachedTo` expresses a busbar T-connection and
+  `voltageLevel` drives the colour code. Semantic checks (voltage consistency / busbar feed /
+  五防) live in `result.designer.validatePower()`. Coordinates are optional.
 
 The package contains:
 
-- DSL types and schema (ER + flowchart + BPMN)
-- structural validator
-- compilers from DSL to Entity/Relation or FlowNode/FlowEdge props (shared layered layout)
+- DSL types and schema, plus a structural validator that dispatches on `kind`
+- compilers from DSL to component props: `compileDsl` (ER) / `compileFlowDsl` / `compileBpmnDsl` /
+  `compileUmlDsl` / `compileStatechartDsl` / `compileGanttDsl` / `compilePowerDsl`, sharing one
+  layered layout
 - browser runtime that renders DSL through `ice-entity-designer`
-- power documents (`kind: 'power'`): one-line diagrams — equipment types mirror `ice-entity-designer`'s
-  power pack, `attachedTo` expresses busbar T-connection, `voltageLevel` drives the colour code;
-  semantic checks (voltage consistency / busbar feed / 五防) live in `result.designer.validatePower()`
 - browser examples with a JSON editor (`examples/entity-editor-dsl.html`,
   `examples/flowchart-dsl.html`, `examples/bpmn-dsl.html`, `examples/uml-dsl.html`,
   `examples/statechart-dsl.html`, `examples/gantt-dsl.html`, `examples/power-dsl.html`)
-- the four new diagram examples (BPMN / UML / statechart / gantt) share
-  `examples/canvas-interactions.js`: canvas fills the preview pane, wheel zooms at the
-  cursor (`ICE.zoomAt`), dragging blank space (or any middle-button drag) pans, plus
-  「适应视图 / 复位视图」 buttons
+- all diagram examples share `examples/canvas-interactions.js`: canvas fills the preview
+  pane, wheel zooms at the cursor (`ICE.zoomAt`), dragging blank space (or any middle-button
+  drag) pans, plus 「适应视图 / 复位视图」 buttons
 
 ## Install
 
 ```bash
-npm install
-npm run build
+npm install ice-entity-designer-dsl
 ```
+
+This installs `ice-entity-designer` as well (the DSL runtime renders through it; the engine
+kernel ships bundled in that package). For the browser build, load
+`node_modules/ice-entity-designer/dist/index.umd.js` first, then `dist/index.umd.js` — see below.
 
 ## Browser usage
 
@@ -251,15 +255,17 @@ intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / paral
 
 ## API
 
-- `validateDsl(dsl)` —— ER / flowchart / BPMN / UML / statechart / gantt documents (dispatches on `kind`); `validateFlowDsl(dsl)` / `validateBpmnDsl(dsl)` / `validateUmlDsl(dsl)` / `validateStatechartDsl(dsl)` / `validateGanttDsl(dsl)` for one kind only
+- `validateDsl(dsl)` —— ER / flowchart / BPMN / UML / statechart / gantt / power documents (dispatches on `kind`); `validateFlowDsl(dsl)` / `validateBpmnDsl(dsl)` / `validateUmlDsl(dsl)` / `validateStatechartDsl(dsl)` / `validateGanttDsl(dsl)` / `validatePowerDsl(dsl)` for one kind only
 - `compileDsl(dsl)` —— ER document → `Entity` / `Relation` props
 - `compileFlowDsl(dsl)` —— flowchart document → `FlowNode` / `FlowEdge` props (with layered auto-layout)
 - `compileBpmnDsl(dsl)` —— BPMN document → `FlowNode` / `FlowEdge` props (container auto-geometry + container-scoped auto-layout)
 - `compileUmlDsl(dsl)` —— UML document → `UmlClass` / `UmlRelation` props (inheritance-driven layering)
 - `compileStatechartDsl(dsl)` —— statechart document → `StateNode` / `StateTransition` props (flow layering + composite auto-sizing)
 - `compileGanttDsl(dsl)` —— gantt document → `GanttTask` / `GanttDependency` props (no coordinates; rows filled in)
+- `compilePowerDsl(dsl)` —— power document → `PowerSymbol` / `PowerLine` props (busbar T-connections resolved, voltage colour code applied)
 - `layeredLayout(items, edges, options)` —— the shared layered layout (`direction: "vertical" | "horizontal"`)
 - `renderDsl(canvasOrId, dsl)` —— renders any kind, returns `{ kind, ice, designer }`
+- `renderPowerDsl(canvasOrId, dsl)` —— power documents specifically (`renderFlowDsl` / `renderBpmnDsl` / `renderUmlDsl` / `renderStatechartDsl` / `renderGanttDsl` are the per-kind equivalents)
 - Export: `result.designer.toSvg(options)` (flowchart / BPMN) or `IED.exportSvg(result.ice, options)`; `options` = `{ area: 'content' | 'viewport', padding, scale, background, includeTools }`. The SVG is regenerated from the component tree + path commands, so it matches the canvas (geometry, styles, opacity, shadows, link labels) and can be rasterised to PNG/PDF by any external tool.
 - `DSL_SCHEMA_VERSION`
 
@@ -267,7 +273,8 @@ intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / paral
 
 Open `examples/entity-editor-dsl.html` (ER), `examples/flowchart-dsl.html`
 (flowchart), `examples/bpmn-dsl.html` (BPMN), `examples/uml-dsl.html` (UML),
-`examples/statechart-dsl.html` (statechart) or `examples/gantt-dsl.html` (gantt) after building.
+`examples/statechart-dsl.html` (statechart), `examples/gantt-dsl.html` (gantt) or
+`examples/power-dsl.html` (power one-line diagram) after building.
 渲染结果可以滚轮缩放、空白处拖拽平移，工具栏还有「适应视图 / 复位视图」。
 
 ## Agent discovery
