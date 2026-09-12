@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, or gantt schedules) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.3.4"
+version: "1.3.5"
 category: data
 platforms:
   - claude-code
@@ -1351,6 +1351,17 @@ flow types, and DI layout. It is a **layout-preserving exchange format**, not a 
 BPMN execution model: conditions travel as text, and there are no engine semantics
 (no token simulation, no boundary-event subscriptions, no multi-instance metadata).
 
+### Simulating a BPMN process (token flow)
+
+When the user asks to **demonstrate** or **animate** a process ("流程怎么走", "演示一下"),
+do not fake it with timers over DOM elements: `ice-entity-designer` ships
+`new IED.BpmnSimulator(designer, { nodeDuration, edgeDuration })` — `start()` puts a token
+on every start event and drives it along the sequence flows (dwell on tasks, pick one
+branch at exclusive gateways by condition/default, split at parallel gateways, die at end
+events). Tokens live in the tool layer, so the document, snapshots and BPMN XML export stay
+clean; `stop()` clears them. Drive it with the engine frame loop in the browser
+(`start()` subscribes for you) or step it deterministically in tests via `simulator.step(dtMs)`.
+
 ### BPMN anti-patterns
 
 - Using `sequence` for a line that crosses pools: the validator flags it; a line
@@ -1549,15 +1560,21 @@ sprint breakdowns, resource timelines — anything where the question is "what h
 | `days` | duration in days, default 1 |
 | `progress` | 0..1, default 0 (drawn as a filled overlay) |
 | `row` | row index, default = declaration order |
+| `resource` | owner/resource name — same-resource overlapping tasks are flagged by the validator |
 
 **There are no coordinates.** The horizontal axis is time (`start` × `dayWidth`), the
 vertical axis is the row. Never emit `left`/`top` for gantt tasks — they would fight the
 dates, and the editor snaps dragged bars back to whole days anyway.
 
-### Dependencies, validation, rendering
+### Dependencies, validation, rendering, scheduling
 
 - `edges` are finish-to-start dependencies: the arrow goes from the predecessor's end to
-  the successor's start. They constrain the plan but do not move bars (no auto-scheduling).
+  the successor's start.
+- Schedule, don't just draw: `options.autoSchedule: true` (or `designer.autoSchedule()`)
+  pushes every task to its earliest feasible start (only later, never earlier — a plan
+  should not silently pull work forward). `designer.criticalPath()` returns the zero-float
+  chain to highlight; `designer.validateGantt()` reports dependency cycles AND
+  resource conflicts (same `resource` with overlapping dates).
 - `validateDsl()` checks structure (ids, `start` format, `days >= 1`, `progress` in 0..1,
   endpoints); semantics live in the designer — `result.designer.validateGantt()` reports
   dependency cycles.
@@ -1571,6 +1588,9 @@ dates, and the editor snaps dragged bars back to whole days anyway.
 - Overlapping a task with itself by hand-computing "day counts" across months: use
   durations (`days`) and let the renderer place bars — `2026-02-25 + 5 days` spans the month.
 - Treating dependencies as cosmetic: a cycle is a broken schedule; the validator flags it.
+- Emitting dates that already violate the dependencies and hoping the viewer fixes it:
+  set `options.autoSchedule` (or call `autoSchedule()`), and give tasks a `resource` when
+  the plan is people-bound so conflicts surface.
 - Long plans with `dayWidth` cranked up: pick a width where the whole plan fits the page
   (the editor's 适应视图 / `dayWidth` control does this).
 

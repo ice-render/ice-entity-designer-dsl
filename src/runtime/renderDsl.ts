@@ -187,12 +187,18 @@ export function renderGanttDsl(canvasOrId: any, dsl: DslGanttDocument): RenderGa
       days: task.days,
       progress: task.progress,
       row: task.row,
+      resource: task.resource,
     });
   });
   scene.edges.forEach((edge: any) => {
     designer.createDependency(edge);
   });
   designer.select(null);
+
+  // 文档可以要求「按依赖排好期再渲染」：把绘制当天的排期推成最早可行排期
+  if (options.autoSchedule) {
+    designer.autoSchedule();
+  }
 
   if (options.viewport) {
     ice.setViewport(options.viewport.scale, options.viewport.tx, options.viewport.ty);

@@ -404,6 +404,8 @@ export type DslGanttTask = {
   progress?: number;
   /** 行号（0 起）；缺省按声明顺序 */
   row?: number;
+  /** 负责人 / 资源名（用于资源冲突检查；空表示不参与） */
+  resource?: string;
 };
 
 export type DslGanttDependency = {
@@ -418,6 +420,8 @@ export type DslGanttDocumentOptions = {
   viewport?: { scale: number; tx: number; ty: number };
   /** 每天多少像素，默认 28 */
   dayWidth?: number;
+  /** 渲染时按依赖自动排程（把任务推到前置结束之后），默认 false */
+  autoSchedule?: boolean;
 };
 
 export type DslGanttDocument = {

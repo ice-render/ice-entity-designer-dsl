@@ -157,9 +157,14 @@ const plan = {
 
 const result = ICEDSL.renderDsl('canvas', plan);
 // result.kind === 'gantt'; result.designer is a GanttDesigner
-result.designer.validateGantt();   // 依赖成环 / 进度越界 / 天数非法
+result.designer.validateGantt();   // 依赖成环 / 进度越界 / 天数非法 / 资源冲突
+result.designer.autoSchedule();    // 自动排程：按依赖推到「前置结束之后」（只推后不提前）
+result.designer.criticalPath();    // 关键路径
 result.designer.toSvg();           // 矢量导出（含日期刻度与进度）
 ```
+
+`options.autoSchedule: true` 可以让**渲染时**就按依赖把排期推到最早可行（文档里写的日期当作下界），
+`resource` 字段用于资源冲突检查（同一负责人时间重叠会在 `validateGantt()` 里报出）。
 
 Fields: `start` (`YYYY-MM-DD`, required), `days` (default 1), `progress` (0..1, default 0),
 `row` (defaults to declaration order). **Do not invent coordinates** — the timeline is derived;

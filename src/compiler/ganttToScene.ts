@@ -7,6 +7,7 @@ export type CompiledGanttTask = {
   days: number;
   progress: number;
   row: number;
+  resource: string;
 };
 
 export type CompiledGanttDependency = {
@@ -40,6 +41,7 @@ export function compileGanttDsl(dsl: DslGanttDocument): CompiledGanttScene {
     days: typeof task.days === 'number' ? task.days : 1,
     progress: typeof task.progress === 'number' ? task.progress : 0,
     row: typeof task.row === 'number' ? task.row : index,
+    resource: String(task.resource || ''),
   }));
 
   const edges: CompiledGanttDependency[] = (dsl.edges || []).map((edge: DslGanttDependency, index) => ({

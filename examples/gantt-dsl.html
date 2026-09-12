@@ -16,7 +16,7 @@
       <div>
         <button id="render">渲染</button>
         <button id="download-svg">导出 SVG</button>
-        <span class="hint">甘特文档不写坐标：横轴是日期（start × days），纵轴是声明顺序（可用 row 覆盖）</span>
+        <span class="hint">甘特文档不写坐标：横轴是日期，纵轴是声明顺序；options.autoSchedule=true 会按依赖把排期推到最早可行</span>
         <textarea id="dsl">
 {
   "schemaVersion": 1,
@@ -24,8 +24,8 @@
   "nodes": [
     { "id": "review", "title": "需求评审", "start": "2026-03-02", "days": 4, "progress": 1 },
     { "id": "design", "title": "交互设计", "start": "2026-03-05", "days": 6, "progress": 0.8 },
-    { "id": "frontend", "title": "前端开发", "start": "2026-03-10", "days": 12, "progress": 0.35 },
-    { "id": "backend", "title": "后端接口", "start": "2026-03-09", "days": 14, "progress": 0.5 },
+    { "id": "frontend", "title": "前端开发", "start": "2026-03-10", "days": 12, "progress": 0.35, "resource": "前端组" },
+    { "id": "backend", "title": "后端接口", "start": "2026-03-09", "days": 14, "progress": 0.5, "resource": "后端组" },
     { "id": "test", "title": "联调测试", "start": "2026-03-24", "days": 6 },
     { "id": "release", "title": "灰度发布", "start": "2026-03-30", "days": 4 }
   ],
@@ -37,7 +37,7 @@
     { "source": "backend", "target": "test" },
     { "source": "test", "target": "release" }
   ],
-  "options": { "dayWidth": 28, "fitViewport": true }
+  "options": { "dayWidth": 28, "fitViewport": true, "autoSchedule": true }
 }
         </textarea>
       </div>

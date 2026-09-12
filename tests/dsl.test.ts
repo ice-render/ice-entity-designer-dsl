@@ -511,7 +511,7 @@ describe('ice-entity-designer-dsl · 甘特文档', () => {
     schemaVersion: 1,
     kind: 'gantt' as const,
     nodes: [
-      { id: 'review', title: '需求评审', start: '2026-03-02', days: 4, progress: 1 },
+      { id: 'review', title: '需求评审', start: '2026-03-02', days: 4, progress: 1, resource: '张三' },
       { id: 'design', title: '交互设计', start: '2026-03-05', days: 6, progress: 0.8 },
       { id: 'frontend', title: '前端开发', start: '2026-03-10', days: 12, progress: 0.35 },
       { id: 'release', title: '灰度发布', start: '2026-03-30', days: 4 },
@@ -554,6 +554,9 @@ describe('ice-entity-designer-dsl · 甘特文档', () => {
     expect(scene.nodes.map((task) => task.row)).toEqual([0, 1, 2, 3]);
     expect(scene.nodes[0]).toMatchObject({ id: 'review', title: '需求评审', start: '2026-03-02', days: 4, progress: 1 });
     expect(scene.nodes[3]).toMatchObject({ id: 'release', days: 4, progress: 0 });
+    // 资源字段（用于资源冲突检查）原样传递
+    expect(scene.nodes[0].resource).toBe('张三');
+    expect(scene.nodes[1].resource).toBe('');
     expect(scene.edges[1]).toMatchObject({ sourceId: 'design', targetId: 'frontend' });
   });
 
