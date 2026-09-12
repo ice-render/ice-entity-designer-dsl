@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate JSON-first DSL documents (ER models or flowcharts) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.2.0"
+version: "1.2.1"
 category: data
 platforms:
   - claude-code
@@ -341,23 +341,28 @@ function componentType(component) {
 
 #### Zoom and pan
 
+**Use the engine primitive for zoom.** `ICE.zoomAt(screenX, screenY, factor, minScale, maxScale)`
+already does anchored zoom (it resolves the world point under the cursor via
+`screenToWorld()` and re-solves the translate). Do not hand-roll the
+`screenToWorld` + `setViewport` math — that duplicates engine code and drifts.
+
 ```js
-function zoomAtPointer(clientX, clientY, factor) {
-  const oldScale = ice.viewport.scale;
-  const nextScale = Math.max(0.3, Math.min(3, oldScale * factor));
-  const rect = canvas.getBoundingClientRect();
-  const cx = clientX - rect.left;
-  const cy = clientY - rect.top;
-  const tx = cx - ((cx - ice.viewport.tx) * nextScale) / oldScale;
-  const ty = cy - ((cy - ice.viewport.ty) * nextScale) / oldScale;
-  ice.setViewport(nextScale, tx, ty);
-}
+canvas.addEventListener(
+  'wheel',
+  (event) => {
+    event.preventDefault(); // 需要 { passive: false }，否则部分浏览器忽略 preventDefault
+    // 锚点 canvas 坐标、倍数、最小/最大 scale（默认 0.05 / 20）
+    ice.zoomAt(event.offsetX, event.offsetY, event.deltaY < 0 ? 1.1 : 1 / 1.1, 0.3, 3);
+  },
+  { passive: false }
+);
+```
 
-canvas.addEventListener('wheel', (event) => {
-  event.preventDefault();
-  zoomAtPointer(event.clientX, event.clientY, event.deltaY > 0 ? 0.9 : 1.1);
-});
+Panning stays application-level (the engine only ships the `setViewport()` /
+`hitTest()` primitives — see the engine's gap analysis): blank-space drag or
+middle-button drag shifts the translate by the pointer delta.
 
+```js
 let panning = false;
 let lastX = 0;
 let lastY = 0;
