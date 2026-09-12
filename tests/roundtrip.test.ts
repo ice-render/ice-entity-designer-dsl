@@ -116,17 +116,9 @@ const POWER_DOC: any = {
 /** 与 renderXxxDsl 相同的建图步骤，只是不经过 canvas（单测里不需要真画布） */
 function buildFlow(doc: any): any {
   const designer: any = new FlowDesigner(stubIce());
-  doc.nodes.forEach((node: any) => designer.createNode(node.kind || 'process', node));
-  (doc.edges || []).forEach((edge: any) =>
-    designer.createEdge({
-      sourceId: edge.source,
-      targetId: edge.target,
-      label: edge.label,
-      sourcePort: edge.sourcePort,
-      targetPort: edge.targetPort,
-      linkShape: edge.linkShape,
-    })
-  );
+  const scene = compileFlowDsl(doc);
+  scene.nodes.forEach((node: any) => designer.createNode(node.kind, node));
+  scene.edges.forEach((edge: any) => designer.createEdge(edge));
   return designer;
 }
 
@@ -200,9 +192,22 @@ describe('DSL 往返 · 通用契约', () => {
       const items: any[] = (back.nodes || back.entities || []) as any[];
       const sourceItems: any[] = (doc.nodes || doc.entities) as any[];
       const ids = items.map((item) => item.id);
-      // id 必须与 Agent 产出时**逐个一致**（顺序也一致）：否则下次迭代引用不上
-      expect(ids).toEqual(sourceItems.map((item) => item.id));
+      // 导出顺序 = 实例顺序（BPMN 会把容器排在业务图元之前，这是编译器的既定顺序）
+      expect(ids).toEqual((designer.nodes || designer.entities).map((item: any) => item.state.id));
+      // 身份集合必须与 Agent 产出时一致：否则下次迭代引用不上
+      expect(new Set(ids)).toEqual(new Set(sourceItems.map((item) => item.id)));
       expect(new Set(ids).size).toBe(ids.length);
+
+      // 连线 / 关系同理：文档里给了 id 就必须原样带回；没给则至少要拿到稳定可用的 id
+      const edges: any[] = (back.edges || back.relations || []) as any[];
+      const sourceEdges: any[] = (doc.edges || doc.relations || []) as any[];
+      const edgeIds = edges.map((item) => item.id);
+      expect(edgeIds).toEqual((designer.edges || designer.relations).map((item: any) => item.state.id));
+      edgeIds.forEach((id) => expect(typeof id === 'string' && id.length > 0).toBe(true));
+      sourceEdges
+        .map((item) => item.id)
+        .filter((id) => typeof id === 'string' && id.length > 0)
+        .forEach((id) => expect(edgeIds).toContain(id));
     });
 
     it(`${kind}：把导出的文档再渲染一遍，节点 id 与位置与第一遍一致`, () => {
@@ -275,5 +280,19 @@ describe('DSL 往返 · 用户编辑要能读回来', () => {
     expect(entity.name).toBe('SalesOrder');
     expect(entity.fields[0].comment).toBe('单号');
     expect(validateDsl(back).valid).toBe(true);
+  });
+});
+
+describe('DSL 往返 · 推断不出来时必须明确报错', () => {
+  it('空实例无法判别类型：抛错，而不是悄悄当成 ER 文档', () => {
+    const designer: any = new FlowDesigner(stubIce());
+    expect(() => toDsl(designer)).toThrow(/kind/i);
+    expect(() => toDsl({})).toThrow(/kind/i);
+  });
+
+  it('显式给出 kind 时照常工作（空文档也允许）', () => {
+    const designer: any = new FlowDesigner(stubIce());
+    expect(toDsl(designer, { kind: 'flowchart' })).toMatchObject({ kind: 'flowchart', nodes: [] });
+    expect(toDsl({ kind: 'uml', designer }, {} as any)).toMatchObject({ kind: 'uml', nodes: [] });
   });
 });

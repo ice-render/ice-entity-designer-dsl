@@ -336,10 +336,15 @@ function exportPower(designer: DesignerLike): any {
   };
 }
 
-/** 按图元 kind / designer 形状推断文档类型（显式传 kind 时以显式为准） */
-function detectKind(designer: DesignerLike): string {
+/**
+ * 按图元 kind / designer 形状推断文档类型（显式传 kind 时以显式为准）。
+ *
+ * 推断不出来就返回 undefined —— 调用方必须报错，绝不能悄悄当成 ER 文档：
+ * 一份本该是流程图的空文档被导成 ER，错误会一直传到下游才发现。
+ */
+function detectKind(designer: DesignerLike): string | undefined {
   if (!designer) {
-    return 'entity';
+    return undefined;
   }
   if (Array.isArray(designer.entities)) {
     return 'entity';
@@ -354,7 +359,7 @@ function detectKind(designer: DesignerLike): string {
   if (STATECHART_KINDS.indexOf(kind) >= 0) return 'statechart';
   if ((POWER_DSL_KINDS as readonly string[]).indexOf(kind) >= 0) return 'power';
   if (FLOW_KINDS.indexOf(kind) >= 0) return 'flowchart';
-  return 'entity';
+  return undefined;
 }
 
 /**
@@ -366,6 +371,11 @@ function detectKind(designer: DesignerLike): string {
 export function toDsl(input: any, options: { kind?: string } = {}): DslDocument {
   const designer: DesignerLike = input && input.designer ? input.designer : input;
   const kind = options.kind || (input && input.kind) || detectKind(designer);
+  if (!kind) {
+    throw new Error(
+      "toDsl(): 无法推断文档类型（实例里没有可识别的图元）。请显式传入 kind：'flowchart' | 'bpmn' | 'uml' | 'statechart' | 'gantt' | 'power' | 'entity'。"
+    );
+  }
   switch (kind) {
     case 'flowchart':
       return exportFlow(designer) as DslDocument;

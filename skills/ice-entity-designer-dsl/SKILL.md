@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
-description: Generate JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, or gantt schedules) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.3.9"
+description: Generate and round-trip JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, gantt schedules, power one-line diagrams) for ice-entity-designer — render them into editable instances and read user edits back with toDsl(). For interactive editor demos or pages, route to ice-entity-designer instead.
+version: "1.4.0"
 category: data
 platforms:
   - claude-code
@@ -11,7 +11,7 @@ platforms:
   - gemini-cli
   - other
 metadata:
-  short-description: JSON-first ER + flowchart + BPMN 2.0 + UML + statechart + gantt DSL, plus canonical interactive ice-entity-designer editor demo guidance.
+  short-description: JSON-first ER + flowchart + BPMN 2.0 + UML + statechart + gantt + power DSL with render → edit → toDsl() round-trip, plus canonical interactive ice-entity-designer editor demo guidance.
 ---
 
 # ice-entity-designer-dsl
@@ -887,8 +887,10 @@ when omitted.
 
 Contract (covered by `tests/roundtrip.test.ts` for all seven kinds):
 
-- **ids survive** — the ids you authored come back in the same order, so a follow-up turn can
-  keep referencing `customer` / `qf1` / `check` instead of guessing at generated names;
+- **ids survive** — the ids you authored come back (export order = instance order; for BPMN the
+  pools/lanes come before the flow elements because that is the compiler's order), so a
+  follow-up turn can keep referencing `customer` / `qf1` / `check`. Edges you left without an
+  `id` get a stable `edge-0`-style id instead of a fresh random UUID each run;
 - **coordinates are absolute** — nested containers (BPMN pools/lanes, statechart composite
   states) are unwound along the parent chain, so what the user dragged is what you read;
 - **DSL vocabulary only** — engine internals (`zIndex`, matrices, derived children) never leak
@@ -896,7 +898,9 @@ Contract (covered by `tests/roundtrip.test.ts` for all seven kinds):
 - **valid and serializable** — the result always passes `validateDsl()`, never contains
   `undefined`, and survives `JSON.parse(JSON.stringify(doc))`;
 - **idempotent rendering** — re-rendering the exported document reproduces the same node ids
-  and positions.
+  and positions;
+- **explicit failure** — if the instance has no recognisable elements, `toDsl()` throws and
+  asks for an explicit `kind`; it never silently emits an ER document.
 
 Use this whenever the user asks "继续改刚才那张图" / "把这张图存成 JSON" / "update the diagram
 we just made": read the current document with `toDsl()`, edit that JSON, render it again.
