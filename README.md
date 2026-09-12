@@ -10,6 +10,10 @@ One document kind, three shapes:
 - **BPMN document** (`kind: "bpmn"` with `nodes` / `edges`): business processes with
   participants (pools), lanes, events, gateways and message flows. Containers are
   nodes too, so the document stays a flat list; geometries are optional.
+- **UML class diagram** (`kind: "uml"` with `nodes` / `edges`): classes, interfaces and
+  enums with free-text members (`- id: string`, `+ pay(): void`), plus the six relation
+  kinds (inheritance / realization / association / aggregation / composition /
+  dependency). Coordinates are optional — inheritance drives a top-down layering.
 
 The package contains:
 
@@ -18,7 +22,7 @@ The package contains:
 - compilers from DSL to Entity/Relation or FlowNode/FlowEdge props (shared layered layout)
 - browser runtime that renders DSL through `ice-entity-designer`
 - browser examples with a JSON editor (`examples/entity-editor-dsl.html`,
-  `examples/flowchart-dsl.html`, `examples/bpmn-dsl.html`)
+  `examples/flowchart-dsl.html`, `examples/bpmn-dsl.html`, `examples/uml-dsl.html`)
 
 ## Install
 
@@ -125,6 +129,36 @@ const xml = IED.toBpmnXml(result.designer); // BPMN 2.0 + BPMNDI（互操作格�
 const svg = result.designer.toSvg();        // 矢量 SVG（与画布同一口径，放大不糊）
 ```
 
+### UML usage
+
+```js
+const uml = {
+  schemaVersion: 1,
+  kind: 'uml',
+  nodes: [
+    { id: 'entity', kind: 'class', title: 'Entity', abstract: true, methods: ['+ save(): void'] },
+    { id: 'user', kind: 'class', title: 'User', attributes: ['- email: string'] },
+    { id: 'payable', kind: 'interface', title: 'Payable', methods: ['+ pay(): void'] },
+  ],
+  edges: [
+    { source: 'user', target: 'entity', type: 'inheritance' },   // source = 子类，target = 父类
+    { source: 'user', target: 'payable', type: 'realization' },
+  ],
+};
+
+const result = ICEDSL.renderDsl('canvas', uml);
+// result.kind === 'uml'; result.designer is a UmlDesigner
+result.designer.validateUml();                 // 重名类 / 继承成环 / 悬空关系
+result.designer.toSvg();                       // 矢量导出
+IED.toPlantUml(result.designer);               // 文本互操作（PlantUML / Mermaid 语法子集）
+IED.fromPlantUml(text, result.designer);       // 反向导入
+```
+
+Node kinds: `class` (default) / `interface` / `enum`. Relation `type`: `inheritance` /
+`realization` / `association` / `aggregation` / `composition` / `dependency` — the
+direction convention is inherited from PlantUML (`A <|-- B` = B inherits A, so the
+edge is `{ source: 'B', target: 'A' }`).
+
 Node kinds: `pool` / `lane` (containers), `task` (default), `event`, `gateway`,
 `subprocess`, `dataObject`, `annotation`; events carry `eventKind` (start /
 intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / parallel
@@ -135,10 +169,11 @@ intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / paral
 
 ## API
 
-- `validateDsl(dsl)` —— ER / flowchart / BPMN documents (dispatches on `kind`); `validateFlowDsl(dsl)` / `validateBpmnDsl(dsl)` for one kind only
+- `validateDsl(dsl)` —— ER / flowchart / BPMN / UML documents (dispatches on `kind`); `validateFlowDsl(dsl)` / `validateBpmnDsl(dsl)` / `validateUmlDsl(dsl)` for one kind only
 - `compileDsl(dsl)` —— ER document → `Entity` / `Relation` props
 - `compileFlowDsl(dsl)` —— flowchart document → `FlowNode` / `FlowEdge` props (with layered auto-layout)
 - `compileBpmnDsl(dsl)` —— BPMN document → `FlowNode` / `FlowEdge` props (container auto-geometry + container-scoped auto-layout)
+- `compileUmlDsl(dsl)` —— UML document → `UmlClass` / `UmlRelation` props (inheritance-driven layering)
 - `layeredLayout(items, edges, options)` —— the shared layered layout (`direction: "vertical" | "horizontal"`)
 - `renderDsl(canvasOrId, dsl)` —— renders any kind, returns `{ kind, ice, designer }`
 - Export: `result.designer.toSvg(options)` (flowchart / BPMN) or `IED.exportSvg(result.ice, options)`; `options` = `{ area: 'content' | 'viewport', padding, scale, background, includeTools }`. The SVG is regenerated from the component tree + path commands, so it matches the canvas (geometry, styles, opacity, shadows, link labels) and can be rasterised to PNG/PDF by any external tool.
@@ -147,7 +182,7 @@ intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / paral
 ## Example
 
 Open `examples/entity-editor-dsl.html` (ER), `examples/flowchart-dsl.html`
-(flowchart) or `examples/bpmn-dsl.html` (BPMN) after building.
+(flowchart), `examples/bpmn-dsl.html` (BPMN) or `examples/uml-dsl.html` (UML) after building.
 
 ## Agent discovery
 

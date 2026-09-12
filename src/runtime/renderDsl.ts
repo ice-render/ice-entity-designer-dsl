@@ -1,9 +1,10 @@
-import { ICE, EntityDesigner, ICELayeredLayout, FlowDesigner, BpmnDesigner } from 'ice-entity-designer';
-import { isBpmnDsl, isFlowDsl } from '../types';
-import type { DslBpmnDocument, DslDocument, DslErDocument, DslFlowDocument } from '../types';
+import { ICE, EntityDesigner, ICELayeredLayout, FlowDesigner, BpmnDesigner, UmlDesigner } from 'ice-entity-designer';
+import { isBpmnDsl, isFlowDsl, isUmlDsl } from '../types';
+import type { DslBpmnDocument, DslDocument, DslErDocument, DslFlowDocument, DslUmlDocument } from '../types';
 import { compileDsl } from '../compiler/dslToScene';
 import { compileFlowDsl } from '../compiler/flowToScene';
 import { compileBpmnDsl } from '../compiler/bpmnToScene';
+import { compileUmlDsl } from '../compiler/umlToScene';
 import { validateDsl } from '../validate';
 
 export type RenderErDslResult = {
@@ -24,7 +25,17 @@ export type RenderBpmnDslResult = {
   designer: any;
 };
 
-export type RenderDslResult = RenderErDslResult | RenderFlowDslResult | RenderBpmnDslResult;
+export type RenderUmlDslResult = {
+  kind: 'uml';
+  ice: any;
+  designer: any;
+};
+
+export type RenderDslResult =
+  | RenderErDslResult
+  | RenderFlowDslResult
+  | RenderBpmnDslResult
+  | RenderUmlDslResult;
 
 function positionLinks(designer: any, scene: any, defaultRouteType: string): any[] {
   const entityBox = new Map();
@@ -103,6 +114,9 @@ export function renderDsl(canvasOrId: any, dsl: DslDocument): RenderDslResult {
   if (!validation.valid) {
     throw new Error(validation.errors.join('\n'));
   }
+  if (isUmlDsl(dsl)) {
+    return renderUmlDsl(canvasOrId, dsl);
+  }
   if (isBpmnDsl(dsl)) {
     return renderBpmnDsl(canvasOrId, dsl);
   }
@@ -110,6 +124,45 @@ export function renderDsl(canvasOrId: any, dsl: DslDocument): RenderDslResult {
     return renderFlowDsl(canvasOrId, dsl);
   }
   return renderErDsl(canvasOrId, dsl as DslErDocument);
+}
+
+/**
+ * 渲染 UML 类图文档：类是复合组件（成员由 state 派生），关系是六种记法之一。
+ *
+ * 语义校验用 `designer.validateUml()`；文本互操作用 `IED.toPlantUml` / `IED.fromPlantUml`；
+ * 矢量导出用 `designer.toSvg()`。
+ */
+export function renderUmlDsl(canvasOrId: any, dsl: DslUmlDocument): RenderUmlDslResult {
+  const scene = compileUmlDsl(dsl);
+  const options: any = scene.options || {};
+  const ice: any = new ICE().init(canvasOrId);
+  const designer: any = new UmlDesigner(ice);
+
+  scene.nodes.forEach((node: any) => {
+    designer.createClass({
+      id: node.id,
+      kind: node.kind,
+      className: node.className,
+      abstract: node.abstract,
+      attributes: node.attributes,
+      methods: node.methods,
+      left: node.left,
+      top: node.top,
+      width: node.width,
+    });
+  });
+  scene.edges.forEach((edge: any) => {
+    designer.createRelation(edge);
+  });
+  designer.select(null);
+
+  if (options.viewport) {
+    ice.setViewport(options.viewport.scale, options.viewport.tx, options.viewport.ty);
+  } else if (options.fitViewport !== false) {
+    designer.fitViewport(options.fitViewportPadding);
+  }
+  designer.resetHistory();
+  return { kind: 'uml', ice, designer };
 }
 
 /**

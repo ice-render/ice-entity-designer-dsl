@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>ice-entity-designer-dsl UML example</title>
+  <style>
+    body {
+      margin: 0;
+      font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 460px 1fr;
+      height: 100vh;
+    }
+    textarea {
+      width: 100%;
+      height: calc(100vh - 60px);
+      box-sizing: border-box;
+      border: 0;
+      border-right: 1px solid #e2e8f0;
+      padding: 12px;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      resize: none;
+    }
+    .preview {
+      padding: 12px;
+      overflow: auto;
+    }
+    button {
+      margin: 8px;
+      padding: 7px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #ffffff;
+    }
+    canvas {
+      display: block;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #ffffff;
+    }
+    .hint {
+      margin: 0 8px;
+      color: #64748b;
+      font-size: 12px;
+    }
+  </style>
+  <body>
+    <main>
+      <div>
+        <button id="render">渲染</button>
+        <button id="download-svg">导出 SVG</button>
+        <button id="download-text">导出 PlantUML</button>
+        <span class="hint">类坐标可省略：缺省时按继承关系分层（父类在上、子类在下）</span>
+        <textarea id="dsl">
+{
+  "schemaVersion": 1,
+  "kind": "uml",
+  "nodes": [
+    { "id": "entity", "kind": "class", "title": "Entity", "abstract": true,
+      "attributes": ["# id: string", "# createdAt: Date"], "methods": ["+ save(): Promise<void>"] },
+    { "id": "user", "kind": "class", "title": "User",
+      "attributes": ["- email: string", "- nickname: string"], "methods": ["+ placeOrder(): Order"] },
+    { "id": "order", "kind": "class", "title": "Order",
+      "attributes": ["- id: string", "- total: number"],
+      "methods": ["+ pay(amount: number): void", "+ cancel(): void"] },
+    { "id": "item", "kind": "class", "title": "OrderItem",
+      "attributes": ["- sku: string", "- quantity: number"] },
+    { "id": "payable", "kind": "interface", "title": "Payable", "methods": ["+ pay(amount: number): void"] },
+    { "id": "status", "kind": "enum", "title": "OrderStatus", "attributes": ["PENDING", "PAID", "CANCELLED"] }
+  ],
+  "edges": [
+    { "source": "user", "target": "entity", "type": "inheritance" },
+    { "source": "order", "target": "entity", "type": "inheritance" },
+    { "source": "item", "target": "entity", "type": "inheritance" },
+    { "source": "order", "target": "payable", "type": "realization" },
+    { "source": "order", "target": "item", "type": "composition", "label": "1..*" },
+    { "source": "user", "target": "order", "type": "association", "label": "1 : 0..*" },
+    { "source": "order", "target": "status", "type": "dependency" }
+  ],
+  "options": { "fitViewport": true, "gapX": 90, "gapY": 120 }
+}
+        </textarea>
+      </div>
+      <div class="preview">
+        <canvas id="canvas" width="1100" height="820"></canvas>
+      </div>
+    </main>
+
+    <script src="../node_modules/ice-entity-designer/dist/index.umd.js"></script>
+    <script src="../dist/index.umd.js"></script>
+    <script>
+      const textarea = document.getElementById('dsl');
+      document.getElementById('render').addEventListener('click', () => {
+        const oldCanvas = document.getElementById('canvas');
+        const nextCanvas = oldCanvas.cloneNode(false);
+        oldCanvas.parentNode.replaceChild(nextCanvas, oldCanvas);
+        try {
+          window.__dslResult = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
+          window.__dslErrors = window.__dslResult.designer.validateBpmn();
+        } catch (error) {
+          alert(error.message);
+        }
+      });
+      document.getElementById('download-svg').addEventListener('click', () => {
+        const result = window.__dslResult;
+        if (!result) {
+          return;
+        }
+        // 渲染出来的 designer 直接能导出矢量（与应用层同一套 API，DSL 不另造导出）
+        const svg = result.designer.toSvg({ padding: 16, background: '#ffffff' });
+        window.__exportedSvg = svg;
+        const blob = new Blob([svg], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'uml-class-diagram.svg';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      document.getElementById('download-text').addEventListener('click', () => {
+        const result = window.__dslResult;
+        if (!result) {
+          return;
+        }
+        // 文本互操作：类图文本可直接贴进 Wiki / Markdown / 代码评审
+        const text = IED.toPlantUml(result.designer, { title: 'DSL 生成的类图' });
+        window.__plantuml = text;
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'uml-class-diagram.puml';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      window.__dslResult = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
+      window.__dslErrors = window.__dslResult.designer.validateUml();
+    </script>
+  </body>
+</html>

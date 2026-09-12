@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
-description: Generate JSON-first DSL documents (ER models, flowcharts, or BPMN 2.0 processes with pools and lanes) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.3.1"
+description: Generate JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, or UML class diagrams) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
+version: "1.3.2"
 category: data
 platforms:
   - claude-code
@@ -11,7 +11,7 @@ platforms:
   - gemini-cli
   - other
 metadata:
-  short-description: JSON-first ER + flowchart + BPMN 2.0 DSL plus canonical interactive ice-entity-designer editor demo guidance.
+  short-description: JSON-first ER + flowchart + BPMN 2.0 + UML class diagram DSL, plus canonical interactive ice-entity-designer editor demo guidance.
 ---
 
 # ice-entity-designer-dsl
@@ -1363,6 +1363,86 @@ BPMN execution model: conditions travel as text, and there are no engine semanti
   has no participants and BPMN semantics are not checkable.
 - Mixing `kind: "bpmn"` nodes into a `kind: "flowchart"` document: the vocabulary is
   not shared; pick one discriminator per document.
+
+## UML class diagram DSL
+
+Use this mode when the artifact is a **class model**: domain models, API/domain layer
+design, refactoring targets, "what does this service look like". Classes, interfaces
+and enums are nodes; the six UML relations are edges. Members are **free text**
+(`- id: string`, `+ pay(amount: number): void`) — the same spelling PlantUML and
+Mermaid use, so anything you know about those formats carries over.
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "kind": "uml",                        // required discriminator
+  "nodes": [
+    { "id": "entity", "kind": "class", "title": "Entity", "abstract": true,
+      "attributes": ["# id: string"], "methods": ["+ save(): Promise<void>"] },
+    { "id": "user", "kind": "class", "title": "User",
+      "attributes": ["- email: string"], "methods": ["+ placeOrder(): Order"] },
+    { "id": "payable", "kind": "interface", "title": "Payable", "methods": ["+ pay(): void"] },
+    { "id": "status", "kind": "enum", "title": "OrderStatus", "attributes": ["PAID", "UNPAID"] }
+  ],
+  "edges": [
+    { "source": "user", "target": "entity", "type": "inheritance" },  // 子类 → 父类
+    { "source": "user", "target": "payable", "type": "realization" },
+    { "source": "user", "target": "status", "type": "dependency" }
+  ],
+  "options": { "fitViewport": true, "gapX": 90, "gapY": 120 }
+}
+```
+
+### Node kinds
+
+| `kind` | Renders as |
+| --- | --- |
+| `class` | three compartments (name / attributes / methods); `abstract: true` adds «abstract» |
+| `interface` | «interface» stereotype, italic name |
+| `enum` | «enumeration» stereotype, literals in the attribute compartment |
+
+Box height grows with the member list automatically — you never position or size
+members yourself.
+
+### Relation types
+
+| `type` | Notation |
+| --- | --- |
+| `inheritance` | solid line + hollow triangle (points at the superclass) |
+| `realization` | dashed line + hollow triangle (points at the interface) |
+| `association` | solid line |
+| `aggregation` | solid line + **hollow diamond** on the whole side |
+| `composition` | solid line + **filled diamond** on the whole side |
+| `dependency` | dashed line + open arrow |
+
+**Direction convention** (inherited from PlantUML, easy to get backwards):
+`A <|-- B` means B inherits A, so the edge is `{ "source": "B", "target": "A" }`.
+For aggregation/composition the diamond sits on the **source** (the whole).
+
+### Layout, validation, rendering
+
+- Coordinates are optional: with any node missing `left`/`top` the whole model is
+  layered **top-down by inheritance/realization** (superclass above subclass).
+- `validateDsl()` checks structure (ids, kinds, member arrays, endpoints, relation
+  types); semantic rules live in the designer — call `result.designer.validateUml()`
+  for duplicate class names, dangling relations and inheritance cycles.
+- `ICEDSL.renderDsl('canvas', umlDoc)` returns `{ kind: 'uml', designer: UmlDesigner }`.
+- Text interop: `IED.toPlantUml(designer)` / `IED.fromPlantUml(text, designer)` speak the
+  PlantUML/Mermaid class-diagram subset (class/interface/enum bodies, the six arrows,
+  quoted names, comments). Prefer this over inventing your own format when the user
+  wants something to paste into a wiki or a code review.
+- A JSON-editor plus live preview page lives in `examples/uml-dsl.html`.
+
+### UML anti-patterns
+
+- Writing members as structured objects (`{ name, type }`) — members are free text in
+  this DSL, matching PlantUML/Mermaid.
+- Reversing the inheritance direction (`{ source: 'Parent', target: 'Child' }`): the
+  triangle then points at the subclass and the top-down layout inverts.
+- Dumping a whole codebase as one diagram: split by module/package and keep each
+  document readable (10-20 classes).
+- Forgetting `«interface»`: an interface is `kind: 'interface'`, not a class named
+  "IUser".
 
 ## Worked example: compact e-commerce model
 

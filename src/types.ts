@@ -228,8 +228,8 @@ export type DslBpmnDocument = {
   options?: DslBpmnDocumentOptions;
 };
 
-/** 一份 DSL 文档：ER（默认）、流程图（kind: 'flowchart'）或 BPMN（kind: 'bpmn'） */
-export type DslDocument = DslErDocument | DslFlowDocument | DslBpmnDocument;
+/** 一份 DSL 文档：ER（默认）、流程图（kind: 'flowchart'）、BPMN（kind: 'bpmn'）或 UML（kind: 'uml'） */
+export type DslDocument = DslErDocument | DslFlowDocument | DslBpmnDocument | DslUmlDocument;
 
 export type DslValidationResult = {
   valid: boolean;
@@ -244,4 +244,75 @@ export function isFlowDsl(dsl: any): dsl is DslFlowDocument {
 /** 运行时判别：带 kind: 'bpmn' 的按 BPMN 文档处理 */
 export function isBpmnDsl(dsl: any): dsl is DslBpmnDocument {
   return !!dsl && typeof dsl === 'object' && dsl.kind === 'bpmn';
+}
+
+/* ------------------------------------------------------------------------- *
+ * UML 类图文档（kind: 'uml'）
+ *
+ * 与流程图同一套「节点 + 连线」模型：节点 = 类/接口/枚举，连线 = 六种关系。
+ * 成员是**自由文本**（`- id: string` / `+ pay(): void`），与 PlantUML/Mermaid 写法一致。
+ * ------------------------------------------------------------------------- */
+
+export type DslUmlNodeKind = 'class' | 'interface' | 'enum';
+
+export type DslUmlRelationType =
+  | 'inheritance'
+  | 'realization'
+  | 'association'
+  | 'aggregation'
+  | 'composition'
+  | 'dependency';
+
+export type DslUmlNode = {
+  id: string;
+  /** 节点类型，默认 class */
+  kind?: DslUmlNodeKind;
+  /** 类名（title / name 二者取一，name 兼容其它文档写法） */
+  title?: string;
+  name?: string;
+  /** 抽象类（`class` 才有意义；接口与枚举自带构造型） */
+  abstract?: boolean;
+  /** 属性区文本，例如 `['- id: string', '+ total: number']` */
+  attributes?: string[];
+  /** 方法区文本，例如 `['+ pay(amount: number): void']` */
+  methods?: string[];
+  left?: number;
+  top?: number;
+  width?: number;
+  height?: number;
+};
+
+export type DslUmlEdge = {
+  id?: string;
+  source: string;
+  target: string;
+  /** 关系种类，默认 association；方向语义见 SKILL/README（继承时 source=子类、target=父类） */
+  type?: DslUmlRelationType;
+  /** 兼容别名：relation 与 type 等价（type 优先） */
+  relation?: DslUmlRelationType;
+  label?: string;
+};
+
+export type DslUmlDocumentOptions = {
+  /** 是否自动适应视图，默认 true */
+  fitViewport?: boolean;
+  fitViewportPadding?: number;
+  viewport?: { scale: number; tx: number; ty: number };
+  /** 缺坐标时的分层布局（继承关系自上而下），默认 layered */
+  layout?: 'layered' | 'none';
+  gapX?: number;
+  gapY?: number;
+};
+
+export type DslUmlDocument = {
+  schemaVersion?: number;
+  kind: 'uml';
+  nodes: DslUmlNode[];
+  edges?: DslUmlEdge[];
+  options?: DslUmlDocumentOptions;
+};
+
+/** 运行时判别：带 kind: 'uml' 的按类图文档处理 */
+export function isUmlDsl(dsl: any): dsl is DslUmlDocument {
+  return !!dsl && typeof dsl === 'object' && dsl.kind === 'uml';
 }

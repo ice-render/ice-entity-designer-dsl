@@ -1,6 +1,7 @@
-import { isBpmnDsl, isFlowDsl } from './types';
+import { isBpmnDsl, isFlowDsl, isUmlDsl } from './types';
 import type {
   DslBpmnDocument,
+  DslUmlDocument,
   DslDocument,
   DslFlowDocument,
   DslFlowNodeKind,
@@ -29,11 +30,17 @@ const BPMN_GATEWAY_TYPES = ['exclusive', 'parallel', 'inclusive', 'event'];
 const BPMN_TASK_TYPES = ['none', 'user', 'service', 'script', 'send', 'receive', 'manual'];
 const BPMN_FLOW_TYPES = ['sequence', 'message', 'association'];
 
+const UML_NODE_KINDS = ['class', 'interface', 'enum'];
+const UML_RELATION_TYPES = ['inheritance', 'realization', 'association', 'aggregation', 'composition', 'dependency'];
+
 /**
  * 校验一份 DSL 文档：ER（entities/relations）、流程图（kind: 'flowchart'）
  * 或 BPMN（kind: 'bpmn'，nodes/edges + 池/泳道容器）。
  */
 export function validateDsl(dsl: DslDocument): DslValidationResult {
+  if (isUmlDsl(dsl)) {
+    return validateUmlDsl(dsl);
+  }
   if (isBpmnDsl(dsl)) {
     return validateBpmnDsl(dsl);
   }
@@ -228,6 +235,86 @@ export function validateFlowDsl(dsl: DslFlowDocument): DslValidationResult {
       }
       if (edge.linkShape !== undefined && edge.linkShape !== 'visio' && edge.linkShape !== 'bezier') {
         errors.push(`${prefix}.linkShape must be "visio" or "bezier" when present`);
+      }
+    });
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * UML 文档校验：结构 + 词汇表 + 端点存在。
+ *
+ * 语义检查（重名类、继承成环等）交给 `UmlDesigner.validateUml()` —— 与 BPMN 同一分工：
+ * 结构在 DSL 侧、语义在设计师侧，不重复实现。
+ */
+export function validateUmlDsl(dsl: DslUmlDocument): DslValidationResult {
+  const errors: string[] = [];
+  if (!dsl || typeof dsl !== 'object' || Array.isArray(dsl)) {
+    return { valid: false, errors: ['DSL root must be an object'] };
+  }
+  if (dsl.schemaVersion !== undefined && dsl.schemaVersion !== DSL_SCHEMA_VERSION) {
+    errors.push(`Unsupported schemaVersion: ${dsl.schemaVersion}`);
+  }
+
+  const ids = new Set<string>();
+  if (!Array.isArray(dsl.nodes)) {
+    errors.push('nodes must be an array');
+  } else {
+    dsl.nodes.forEach((node, index) => {
+      const prefix = `nodes[${index}]`;
+      if (!node || typeof node !== 'object') {
+        errors.push(`${prefix} must be an object`);
+        return;
+      }
+      if (typeof node.id !== 'string' || !node.id.trim()) {
+        errors.push(`${prefix}.id must be a non-empty string`);
+      } else if (ids.has(node.id)) {
+        errors.push(`${prefix}.id is duplicated: ${node.id}`);
+      } else {
+        ids.add(node.id);
+      }
+      if (node.kind !== undefined && UML_NODE_KINDS.indexOf(node.kind) === -1) {
+        errors.push(`${prefix}.kind must be one of ${UML_NODE_KINDS.join('/')}`);
+      }
+      ['attributes', 'methods'].forEach((key) => {
+        const value = (node as any)[key];
+        if (value === undefined) {
+          return;
+        }
+        if (!Array.isArray(value) || value.some((item: any) => typeof item !== 'string')) {
+          errors.push(`${prefix}.${key} must be an array of strings when present`);
+        }
+      });
+      ['left', 'top', 'width', 'height'].forEach((key) => {
+        const value = (node as any)[key];
+        if (value !== undefined && typeof value !== 'number') {
+          errors.push(`${prefix}.${key} must be a number when present`);
+        }
+      });
+    });
+  }
+
+  if (dsl.edges !== undefined && !Array.isArray(dsl.edges)) {
+    errors.push('edges must be an array when present');
+  } else {
+    (dsl.edges || []).forEach((edge, index) => {
+      const prefix = `edges[${index}]`;
+      if (!edge || typeof edge !== 'object') {
+        errors.push(`${prefix} must be an object`);
+        return;
+      }
+      if (typeof edge.source !== 'string' || !edge.source.trim() || !ids.has(edge.source)) {
+        errors.push(`${prefix}.source must reference an existing node id`);
+      }
+      if (typeof edge.target !== 'string' || !edge.target.trim() || !ids.has(edge.target)) {
+        errors.push(`${prefix}.target must reference an existing node id`);
+      }
+      const relationType = edge.type !== undefined ? edge.type : edge.relation;
+      if (relationType !== undefined && UML_RELATION_TYPES.indexOf(relationType) === -1) {
+        errors.push(`${prefix}.type must be one of ${UML_RELATION_TYPES.join('/')}`);
+      }
+      if (edge.label !== undefined && typeof edge.label !== 'string') {
+        errors.push(`${prefix}.label must be a string when present`);
       }
     });
   }

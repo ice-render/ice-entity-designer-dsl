@@ -1,4 +1,13 @@
-import { validateDsl, compileDsl, compileFlowDsl, compileBpmnDsl, isFlowDsl, isBpmnDsl } from '../src';
+import {
+  validateDsl,
+  compileDsl,
+  compileFlowDsl,
+  compileBpmnDsl,
+  compileUmlDsl,
+  isFlowDsl,
+  isBpmnDsl,
+  isUmlDsl,
+} from '../src';
 
 describe('ice-render-dsl', () => {
   it('validates a minimal document', () => {
@@ -311,5 +320,97 @@ describe('ice-entity-designer-dsl · BPMN 文档', () => {
     expect(scene.nodes[2]).toMatchObject({ kind: 'bpmnSubprocess', taskType: 'none' });
     expect(scene.nodes[3]).toMatchObject({ kind: 'bpmnDataObject' });
     expect(scene.nodes[4]).toMatchObject({ kind: 'bpmnAnnotation' });
+  });
+});
+
+describe('ice-entity-designer-dsl · UML 类图文档', () => {
+  const minimalUml = {
+    schemaVersion: 1,
+    kind: 'uml' as const,
+    nodes: [
+      { id: 'entity', kind: 'class' as const, title: 'Entity', abstract: true, methods: ['+ save(): void'] },
+      { id: 'user', kind: 'class' as const, title: 'User', attributes: ['- email: string'], methods: ['+ placeOrder(): Order'] },
+      { id: 'payable', kind: 'interface' as const, title: 'Payable', methods: ['+ pay(): void'] },
+      { id: 'order', kind: 'class' as const, title: 'Order' },
+      { id: 'item', kind: 'class' as const, title: 'OrderItem' },
+      { id: 'status', kind: 'enum' as const, title: 'OrderStatus', attributes: ['PAID', 'UNPAID'] },
+    ],
+    edges: [
+      { source: 'user', target: 'entity', type: 'inheritance' as const },
+      { source: 'order', target: 'payable', type: 'realization' as const },
+      { source: 'user', target: 'order', type: 'association' as const, label: '1 : 0..*' },
+      { source: 'order', target: 'item', type: 'composition' as const, label: '1..*' },
+      { source: 'order', target: 'status', type: 'dependency' as const },
+    ],
+  };
+  it('识别并校验最小 UML 文档', () => {
+    expect(isUmlDsl(minimalUml)).toBe(true);
+    expect(isFlowDsl(minimalUml as any)).toBe(false);
+    expect(validateDsl(minimalUml)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('拒绝重复 id、非法 kind、非字符串成员、悬空端点与非法关系类型', () => {
+    const result = validateDsl({
+      kind: 'uml',
+      nodes: [
+        { id: 'a', kind: 'class' },
+        { id: 'a', kind: 'struct' },
+        { id: 'b', attributes: ['ok', 42] },
+      ],
+      edges: [{ source: 'a', target: 'ghost', type: 'extends' }],
+    } as any);
+    expect(result.valid).toBe(false);
+    const message = result.errors.join('\n');
+    expect(message).toContain('duplicated');
+    expect(message).toContain('nodes[1].kind');
+    expect(message).toContain('nodes[2].attributes');
+    expect(message).toContain('edges[0].target');
+    expect(message).toContain('edges[0].type');
+  });
+
+  it('编译：类名/构造型/成员原样传递，关系种类与标签保留', () => {
+    const scene = compileUmlDsl(minimalUml);
+    expect(scene.kind).toBe('uml');
+    const byId = new Map(scene.nodes.map((node) => [node.id, node]));
+    expect(byId.get('entity')).toMatchObject({ className: 'Entity', kind: 'class', abstract: true, methods: ['+ save(): void'] });
+    expect(byId.get('payable')).toMatchObject({ kind: 'interface' });
+    expect(byId.get('status')).toMatchObject({ kind: 'enum', attributes: ['PAID', 'UNPAID'] });
+    expect(scene.edges[0]).toMatchObject({ sourceId: 'user', targetId: 'entity', relationKind: 'inheritance' });
+    expect(scene.edges[2]).toMatchObject({ relationKind: 'association', label: '1 : 0..*' });
+  });
+
+  it('缺坐标时自动分层：父类在上、子类在下（继承自上而下）', () => {
+    const scene = compileUmlDsl(minimalUml);
+    const byId = new Map(scene.nodes.map((node) => [node.id, node]));
+    const entity = byId.get('entity')!;
+    const user = byId.get('user')!;
+    const order = byId.get('order')!;
+    const payable = byId.get('payable')!;
+    // 继承/实现参与分层，且方向是「父类在上、子类在下」：
+    // Entity 与 Payable 都在第 0 层；User 继承 Entity → 在 Entity 下方；
+    // Order 实现 Payable → 在 Payable 下方（与 User 同层，不要求谁更高）。
+    expect(payable.top).toBe(entity.top);
+    expect(user.top).toBeGreaterThan(entity.top);
+    expect(order.top).toBeGreaterThan(payable.top);
+    // 布局结果落在正坐标区，且类框之间有间距
+    scene.nodes.forEach((node) => {
+      expect(node.left).toBeGreaterThanOrEqual(0);
+      expect(node.top).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  it('给了坐标就是恒等编译', () => {
+    const scene = compileUmlDsl({
+      kind: 'uml',
+      nodes: [
+        { id: 'a', title: 'A', left: 120, top: 80 },
+        { id: 'b', title: 'B', left: 500, top: 80 },
+      ],
+      edges: [{ source: 'a', target: 'b', type: 'aggregation' }],
+    });
+    expect(scene.nodes.map((node) => [node.left, node.top])).toEqual([
+      [120, 80],
+      [500, 80],
+    ]);
   });
 });
