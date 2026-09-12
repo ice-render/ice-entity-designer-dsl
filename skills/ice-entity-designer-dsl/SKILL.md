@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate JSON-first DSL documents (ER models or flowcharts) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.2.3"
+version: "1.2.4"
 category: data
 platforms:
   - claude-code
@@ -782,6 +782,27 @@ Editable style props (all persisted in the snapshot): node `fillColor`,
 `style.lineWidth`, `labelStyle.fillStyle` (branch-label color). `updateNode()` /
 `updateEdge()` apply them immediately — remember `FlowNode.applyPatch()` rebuilds the
 shape/label children, so it is safe to change colors at runtime.
+
+### Document format (v2 = the engine's own serialization)
+
+`flow.serialize()` emits `{ version: 2, kind: "flowchart", scene: <engine payload> }`
+where `scene` is produced by the engine's `Serializer` (`{ version, childNodes }`).
+Consequences worth knowing:
+
+- Anything on a component's `state` round-trips — including app metadata you attach as
+  `state.data` (`{ ... }` arbitrary JSON). No field list to maintain.
+- Unknown component types are skipped and reported in `load()`'s `skipped` array
+  (same contract as the engine's `Deserializer.unknownTypes`).
+- `FlowNode` is a *composite* component (shape + label are derived from its state), so it
+  declares `hasDerivedChildren()` and its internal children are intentionally **not**
+  written to the document; the constructor rebuilds them on load. Without that flag a
+  round-trip would mount them twice.
+- Legacy v1 documents (`{ version: 1, nodes: [...], edges: [...] }`) still load; every
+  write is v2.
+
+`ice-render` exports `Serializer`, `Deserializer`, `SERIALIZATION_VERSION` and
+`SERIALIZATION_MIGRATIONS` so application layers can reuse this exact mechanism on their
+own ICE instances (even before `init()`) instead of inventing a second one.
 
 ### React
 
