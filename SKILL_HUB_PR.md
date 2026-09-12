@@ -2,11 +2,16 @@
 
 ## Title
 
-Add `ice-entity-designer-dsl` skill for rendering ER diagrams from JSON DSL.
+Add `ice-entity-designer-dsl` skill for rendering ER / flowchart / BPMN diagrams from JSON DSL.
 
 ## Summary
 
-`ice-entity-designer-dsl` lets AI Agents render Entity/Relation diagrams through `ice-entity-designer`.
+`ice-entity-designer-dsl` lets AI Agents render diagrams through `ice-entity-designer`
+from a JSON document. Three document kinds, one entry point (`ICEDSL.renderDsl`):
+
+- ER model — `entities` / `relations`
+- Flowchart — `kind: "flowchart"`, `nodes` / `edges` (optional layered auto-layout)
+- BPMN 2.0 — `kind: "bpmn"`, `nodes` / `edges` with pools and lanes as containers
 
 ## Skill path
 
@@ -16,30 +21,32 @@ skills/ice-entity-designer-dsl/SKILL.md
 
 ## Supported concepts
 
-- Entity
-- Field
-- Relation
-- one-to-many / many-to-one / one-to-one / many-to-many
-- PK / FK / UQ / AI / NN
+- **ER**: Entity / Field / Relation, one-to-many / many-to-one / one-to-one /
+  many-to-many, PK / FK / UQ / AI / NN
+- **Flowchart**: terminator / process / decision / io, labeled branch edges,
+  Visio or bezier links
+- **BPMN 2.0**: pool / lane / task / event / gateway / subprocess / dataObject /
+  annotation, sequence / message / association flows, conditions and default
+  flows, semantic validation (`designer.validateBpmn()`) and BPMN 2.0 XML
+  interop (`toBpmnXml` / `fromBpmnXml`)
 
 ## Example
 
 ```json
 {
   "schemaVersion": 1,
-  "layout": "layered",
-  "entities": [
-    {
-      "id": "customer",
-      "name": "Customer",
-      "fields": [
-        { "name": "id", "type": "number", "primary": true }
-      ]
-    }
+  "kind": "bpmn",
+  "nodes": [
+    { "id": "bank", "kind": "pool", "title": "银行" },
+    { "id": "accept", "kind": "lane", "title": "受理岗", "parent": "bank" },
+    { "id": "submit", "kind": "event", "title": "申请提交", "eventKind": "start", "parent": "accept" },
+    { "id": "verify", "kind": "task", "title": "身份核验", "taskType": "service", "parent": "accept" }
   ],
-  "relations": []
+  "edges": [{ "source": "submit", "target": "verify", "label": "受理" }]
 }
 ```
+
+ER 与流程图文档示例见 `README.md` 与 `skills/ice-entity-designer-dsl/SKILL.md`。
 
 ## Install command
 
