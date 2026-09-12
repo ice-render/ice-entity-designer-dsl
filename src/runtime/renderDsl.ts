@@ -1,15 +1,7 @@
-import {
-  ICE,
-  EntityDesigner,
-  ICELayeredLayout,
-  FlowDesigner,
-  BpmnDesigner,
-  UmlDesigner,
-  StatechartDesigner,
-  GanttDesigner,
-} from 'ice-entity-designer';
-import { isBpmnDsl, isFlowDsl, isUmlDsl, isStatechartDsl, isGanttDsl } from '../types';
+import { ICE, EntityDesigner, ICELayeredLayout, FlowDesigner, BpmnDesigner, UmlDesigner, StatechartDesigner, GanttDesigner, PowerDesigner } from 'ice-entity-designer';
+import { isBpmnDsl, isFlowDsl, isUmlDsl, isStatechartDsl, isGanttDsl, isPowerDsl } from '../types';
 import type {
+  DslPowerDocument,
   DslBpmnDocument,
   DslGanttDocument,
   DslDocument,
@@ -24,6 +16,7 @@ import { compileBpmnDsl } from '../compiler/bpmnToScene';
 import { compileUmlDsl } from '../compiler/umlToScene';
 import { compileStatechartDsl } from '../compiler/statechartToScene';
 import { compileGanttDsl } from '../compiler/ganttToScene';
+import { compilePowerDsl } from '../compiler/powerToScene';
 import { validateDsl } from '../validate';
 
 export type RenderErDslResult = {
@@ -150,6 +143,9 @@ export function renderDsl(canvasOrId: any, dsl: DslDocument): RenderDslResult {
   if (isGanttDsl(dsl)) {
     return renderGanttDsl(canvasOrId, dsl);
   }
+  if (isPowerDsl(dsl)) {
+    return renderPowerDsl(canvasOrId, dsl);
+  }
   if (isStatechartDsl(dsl)) {
     return renderStatechartDsl(canvasOrId, dsl);
   }
@@ -214,6 +210,67 @@ export function renderGanttDsl(canvasOrId: any, dsl: DslGanttDocument): RenderGa
  *
  * 语义校验用 `designer.validateStatechart()`；矢量导出用 `designer.toSvg()`。
  */
+/**
+ * 渲染电力一次系统图（单线图）文档。
+ *
+ * 与其它文档类型一致：DSL 只描述模型（设备 + 导体 + 母线 T 接），渲染交给
+ * ice-entity-designer 的 `PowerDesigner` —— 色标、拓扑（带电范围）、五防校验都在那边。
+ * 语义校验用 `designer.validatePower()`；矢量导出用 `designer.toSvg()`。
+ */
+export function renderPowerDsl(canvasOrId: any, dsl: DslPowerDocument): any {
+  const scene = compilePowerDsl(dsl);
+  const options: any = scene.options || {};
+  const ice: any = new ICE().init(canvasOrId);
+  const designer: any = new PowerDesigner(ice);
+  if (options.voltageColors) {
+    designer.setVoltageColors(options.voltageColors);
+  }
+  const created = new Map<string, any>();
+  scene.nodes.forEach((node: any) => {
+    const symbol = designer.createSymbol(node.kind, {
+      name: node.title,
+      voltageLevel: node.voltageLevel,
+      left: node.left,
+      top: node.top,
+      width: node.width,
+      height: node.height,
+      switchState: node.switchState,
+    });
+    if (node.source) {
+      symbol.setState({ energizedSource: true });
+    }
+    created.set(node.id, symbol);
+  });
+  scene.attachments.forEach((attachment: any) => {
+    const device = created.get(attachment.deviceId);
+    const bus = created.get(attachment.busId);
+    if (device && bus) {
+      designer.attachToBus(device, bus);
+    }
+  });
+  scene.edges.forEach((edge: any) => {
+    const source = created.get(edge.sourceId);
+    const target = created.get(edge.targetId);
+    if (!source || !target) {
+      return;
+    }
+    designer.createLine({
+      sourceId: source.state.id,
+      targetId: target.state.id,
+      sourcePort: edge.sourcePort,
+      targetPort: edge.targetPort,
+      voltageLevel: edge.voltageLevel,
+    });
+  });
+  designer.select(null);
+  designer.applyTopology();
+  if (options.fitViewport !== false) {
+    designer.fitViewport(options.fitViewportPadding);
+  }
+  designer.resetHistory();
+  return { kind: 'power', ice, designer };
+}
+
 export function renderStatechartDsl(canvasOrId: any, dsl: DslStatechartDocument): RenderStatechartDslResult {
   const scene = compileStatechartDsl(dsl);
   const options: any = scene.options || {};

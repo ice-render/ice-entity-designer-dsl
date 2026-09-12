@@ -28,9 +28,12 @@ The package contains:
 - structural validator
 - compilers from DSL to Entity/Relation or FlowNode/FlowEdge props (shared layered layout)
 - browser runtime that renders DSL through `ice-entity-designer`
+- power documents (`kind: 'power'`): one-line diagrams — equipment types mirror `ice-entity-designer`'s
+  power pack, `attachedTo` expresses busbar T-connection, `voltageLevel` drives the colour code;
+  semantic checks (voltage consistency / busbar feed / 五防) live in `result.designer.validatePower()`
 - browser examples with a JSON editor (`examples/entity-editor-dsl.html`,
   `examples/flowchart-dsl.html`, `examples/bpmn-dsl.html`, `examples/uml-dsl.html`,
-  `examples/statechart-dsl.html`, `examples/gantt-dsl.html`)
+  `examples/statechart-dsl.html`, `examples/gantt-dsl.html`, `examples/power-dsl.html`)
 - the four new diagram examples (BPMN / UML / statechart / gantt) share
   `examples/canvas-interactions.js`: canvas fills the preview pane, wheel zooms at the
   cursor (`ICE.zoomAt`), dragging blank space (or any middle-button drag) pans, plus

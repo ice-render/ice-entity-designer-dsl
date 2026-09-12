@@ -4,6 +4,8 @@ import {
   isStatechartDsl,
   compileGanttDsl,
   isGanttDsl,
+  compilePowerDsl,
+  isPowerDsl,
   compileDsl,
   compileFlowDsl,
   compileBpmnDsl,
@@ -586,5 +588,76 @@ describe('ice-entity-designer-dsl · 甘特文档', () => {
     });
     expect(scene.nodes.map((task) => task.start)).toEqual(['2026-03-02', '2026-03-20']);
     expect(scene.options).toMatchObject({ dayWidth: 30, autoSchedule: true });
+  });
+});
+
+describe('ice-entity-designer-dsl · 电力一次系统图文档', () => {
+  const substation = {
+    schemaVersion: 1,
+    kind: 'power' as const,
+    nodes: [
+      { id: 'bus1', kind: 'busbar' as const, name: '#1M', voltageLevel: '110kV', left: 120, top: 120, width: 600 },
+      { id: 'bus2', kind: 'busbar' as const, name: '#2M', voltageLevel: '110kV', left: 120, top: 220, width: 600 },
+      { id: 'line', kind: 'generator' as const, name: '甲线', voltageLevel: '110kV', left: 240, top: 620, source: true },
+      { id: 'ds1', kind: 'disconnector' as const, name: '11011', voltageLevel: '110kV', attachedTo: 'bus1' },
+      { id: 'ds2', kind: 'disconnector' as const, name: '11012', voltageLevel: '110kV', attachedTo: 'bus2', switchState: 'open' as const },
+      { id: 'qf', kind: 'breaker' as const, name: '1101', voltageLevel: '110kV', left: 240, top: 350, switchState: 'closed' as const },
+      { id: 'ct', kind: 'currentTransformer' as const, name: '1101TA', voltageLevel: '110kV', left: 240, top: 440 },
+    ],
+    edges: [
+      { source: 'ds1', target: 'qf' },
+      { source: 'ds2', target: 'qf' },
+      { source: 'qf', target: 'ct' },
+      { source: 'ct', target: 'line' },
+    ],
+    options: { fitViewport: true },
+  };
+
+  it('识别并校验最小电力文档', () => {
+    expect(isPowerDsl(substation)).toBe(true);
+    expect(validateDsl(substation)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('拒绝非法 kind、重复 id、悬空端点与「挂在非母线上」', () => {
+    const result = validateDsl({
+      kind: 'power',
+      nodes: [
+        { id: 'a', kind: 'breaker', voltageLevel: '110kV' },
+        { id: 'a', kind: '不存在的设备', voltageLevel: '110千伏' },
+        { id: 'b', kind: 'disconnector', attachedTo: 'a' },
+      ],
+      edges: [{ source: 'a', target: 'ghost' }],
+    } as any);
+    expect(result.valid).toBe(false);
+    const message = result.errors.join('\n');
+    expect(message).toContain('duplicated');
+    expect(message).toContain('nodes[1].kind');
+    expect(message).toContain('nodes[1].voltageLevel');
+    expect(message).toContain('edges[0].target');
+    expect(message).toContain('must point at a busbar');
+  });
+
+  it('编译：坐标 / 电压等级 / 开关状态原样传递，母线 T 接编译成 attachments', () => {
+    const scene = compilePowerDsl(substation);
+    expect(scene.kind).toBe('power');
+    expect(scene.nodes.find((node) => node.id === 'qf')).toMatchObject({
+      kind: 'breaker',
+      voltageLevel: '110kV',
+      left: 240,
+      top: 350,
+      switchState: 'closed',
+    });
+    expect(scene.nodes.find((node) => node.id === 'line')!.source).toBe(true);
+    expect(scene.attachments).toEqual([
+      { deviceId: 'ds1', busId: 'bus1' },
+      { deviceId: 'ds2', busId: 'bus2' },
+    ]);
+    // 省略坐标时给默认网格（不写 NaN）
+    const fallback = compilePowerDsl({
+      kind: 'power',
+      nodes: [{ id: 'x', kind: 'breaker', voltageLevel: '110kV' }],
+    });
+    expect(Number.isFinite(fallback.nodes[0].left)).toBe(true);
+    expect(Number.isFinite(fallback.nodes[0].top)).toBe(true);
   });
 });

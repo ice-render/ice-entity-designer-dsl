@@ -1,5 +1,6 @@
-import { isBpmnDsl, isFlowDsl, isUmlDsl, isStatechartDsl, isGanttDsl } from './types';
+import { isBpmnDsl, isFlowDsl, isUmlDsl, isStatechartDsl, isGanttDsl, isPowerDsl, POWER_DSL_KINDS } from './types';
 import type {
+  DslPowerDocument,
   DslBpmnDocument,
   DslGanttDocument,
   DslStatechartDocument,
@@ -43,6 +44,9 @@ const UML_RELATION_TYPES = ['inheritance', 'realization', 'association', 'aggreg
 export function validateDsl(dsl: DslDocument): DslValidationResult {
   if (isGanttDsl(dsl)) {
     return validateGanttDsl(dsl);
+  }
+  if (isPowerDsl(dsl)) {
+    return validatePowerDsl(dsl);
   }
   if (isStatechartDsl(dsl)) {
     return validateStatechartDsl(dsl);
@@ -540,5 +544,70 @@ function validateErDsl(dsl: any): DslValidationResult {
       }
     });
   }
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * 电力一次系统图文档的结构校验（语义校验在 designer：`validatePower()`）。
+ *
+ * 这里只查「结构」：id 唯一、kind 合法、端点存在、母线 T 接指向母线、电压等级格式。
+ * 电压等级一致性、母线进线、五防这些**语义**规则属于设计器（`renderPowerDsl` 返回的 designer）。
+ */
+export function validatePowerDsl(dsl: DslPowerDocument): DslValidationResult {
+  const errors: string[] = [];
+  const nodes = Array.isArray(dsl.nodes) ? dsl.nodes : [];
+  if (!Array.isArray(dsl.nodes)) {
+    errors.push('nodes must be an array');
+  }
+  const ids = new Set<string>();
+  nodes.forEach((node: any, index: number) => {
+    const prefix = `nodes[${index}]`;
+    if (!node || typeof node !== 'object') {
+      errors.push(`${prefix} must be an object`);
+      return;
+    }
+    if (typeof node.id !== 'string' || !node.id) {
+      errors.push(`${prefix}.id must be a non-empty string`);
+    } else if (ids.has(node.id)) {
+      errors.push(`duplicated node id: ${node.id}`);
+    } else {
+      ids.add(node.id);
+    }
+    if (POWER_DSL_KINDS.indexOf(node.kind) === -1) {
+      errors.push(`${prefix}.kind must be one of ${POWER_DSL_KINDS.join(' / ')}`);
+    }
+    if (node.voltageLevel !== undefined && !/^\d+(\.\d+)?kV$/.test(String(node.voltageLevel))) {
+      errors.push(`${prefix}.voltageLevel must look like "110kV"`);
+    }
+  });
+  nodes.forEach((node: any, index: number) => {
+    if (!node || node.attachedTo === undefined) {
+      return;
+    }
+    const bus = nodes.find((item: any) => item && item.id === node.attachedTo);
+    if (!bus) {
+      errors.push(`nodes[${index}].attachedTo references an unknown node: ${node.attachedTo}`);
+      return;
+    }
+    if (bus.kind !== 'busbar') {
+      errors.push(`nodes[${index}].attachedTo must point at a busbar: ${node.attachedTo} is ${bus.kind}`);
+    }
+  });
+  (dsl.edges || []).forEach((edge: any, index: number) => {
+    const prefix = `edges[${index}]`;
+    if (!edge || typeof edge !== 'object') {
+      errors.push(`${prefix} must be an object`);
+      return;
+    }
+    if (!ids.has(edge.source)) {
+      errors.push(`${prefix}.source references an unknown node: ${edge.source}`);
+    }
+    if (!ids.has(edge.target)) {
+      errors.push(`${prefix}.target references an unknown node: ${edge.target}`);
+    }
+    if (edge.source === edge.target) {
+      errors.push(`${prefix} must not connect a node to itself`);
+    }
+  });
   return { valid: errors.length === 0, errors };
 }

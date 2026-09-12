@@ -436,3 +436,93 @@ export type DslGanttDocument = {
 export function isGanttDsl(dsl: any): dsl is DslGanttDocument {
   return !!dsl && typeof dsl === 'object' && dsl.kind === 'gantt';
 }
+
+/* ------------------------------------------------------------------------- *
+ * 电力一次系统图文档（kind: 'power'）
+ *
+ * 节点 = 一次设备（断路器 / 隔离开关 / 母联…见 POWER_DSL_KINDS），连线 = 导体，
+ * `attachedTo` 表达「挂在母线上」（母线 T 接）。坐标可省略（给一套默认网格），
+ * 真实图纸建议显式给 left/top —— 一次图的布局本身有工程含义（间隔顺序、母线水平）。
+ * ------------------------------------------------------------------------- */
+
+/** 一次设备类型：与 ice-entity-designer 的 POWER_SYMBOL_KINDS 对齐（DSL 侧保持独立副本，
+ *  避免把渲染层依赖带进校验层；两边不一致时以 IED 为准并在 DSL 升级时同步） */
+export const POWER_DSL_KINDS = [
+  'busbar',
+  'breaker',
+  'disconnector',
+  'loadSwitch',
+  'earthingSwitch',
+  'earth',
+  'currentTransformer',
+  'voltageTransformer',
+  'transformer',
+  'fuse',
+  'arrester',
+  'reactor',
+  'generator',
+  'motor',
+  'load',
+  'capacitor',
+  'arcSuppressionCoil',
+  'threeWindingTransformer',
+  'groundingTransformer',
+  'groundingResistor',
+  'cable',
+  'cableTermination',
+  'cubicle',
+] as const;
+
+export type PowerDslKind = (typeof POWER_DSL_KINDS)[number];
+
+export type DslPowerNode = {
+  id: string;
+  /** 设备类型 */
+  kind: PowerDslKind;
+  /** 设备名 / 调度编号（画在符号上方） */
+  name?: string;
+  title?: string;
+  /** 电压等级：'110kV' / '10kV' …（决定色标与语义校验） */
+  voltageLevel?: string;
+  /** 挂在哪条母线上（母线 T 接；目标必须是本文件里的母线节点） */
+  attachedTo?: string;
+  /** 坐标（省略时按声明顺序给默认网格） */
+  left?: number;
+  top?: number;
+  width?: number;
+  height?: number;
+  /** 运行态：开关的分 / 合 */
+  switchState?: 'open' | 'closed';
+  /** 电源点（发电机 / 进线 / 主变电源侧） */
+  source?: boolean;
+};
+
+export type DslPowerEdge = {
+  id?: string;
+  source: string;
+  target: string;
+  sourcePort?: 'T' | 'R' | 'B' | 'L' | 'C';
+  targetPort?: 'T' | 'R' | 'B' | 'L' | 'C';
+  /** 导体电压等级（省略时取两端的等级） */
+  voltageLevel?: string;
+};
+
+export type DslPowerDocumentOptions = {
+  /** 电压等级色标覆盖 */
+  voltageColors?: Record<string, string>;
+  fitViewport?: boolean;
+  fitViewportPadding?: number;
+};
+
+export type DslPowerDocument = {
+  schemaVersion?: number;
+  kind: 'power';
+  nodes: DslPowerNode[];
+  edges?: DslPowerEdge[];
+  options?: DslPowerDocumentOptions;
+};
+
+/** 运行时判别：带 kind: 'power' 的按电力一次系统图文档处理 */
+export function isPowerDsl(dsl: any): dsl is DslPowerDocument {
+  return !!dsl && typeof dsl === 'object' && dsl.kind === 'power';
+}

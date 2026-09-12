@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, or gantt schedules) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.3.8"
+version: "1.3.9"
 category: data
 platforms:
   - claude-code
@@ -1532,6 +1532,28 @@ Labels are composed automatically: `event [guard] / action` with missing parts o
 - Nesting states without a composite: only `kind: "composite"` accepts `parent`.
 - Forgetting the final state: a lifecycle usually has completion; `validateStatechart()`
   will not flag a missing final, but the reviewer will.
+
+## Power DSL
+
+`kind: "power"` renders a **single-line diagram** (one-line diagram) of a substation through
+`ice-entity-designer`'s power pack.
+
+- `nodes[].kind` is an equipment type: `busbar`, `breaker`, `disconnector`, `loadSwitch`,
+  `earthingSwitch`, `earth`, `currentTransformer`, `voltageTransformer`, `transformer`, `fuse`,
+  `arrester`, `reactor`, `generator`, `motor`, `load`, `capacitor`, `arcSuppressionCoil`,
+  `threeWindingTransformer`, `groundingTransformer`, `groundingResistor`, `cable`,
+  `cableTermination`, `cubicle`.
+- `nodes[].attachedTo: "<busbar id>"` expresses a **busbar T-connection** (the device hangs on that
+  busbar; no conductor needed). `voltageLevel: "110kV"` drives the colour code, `switchState`
+  is the open/closed run state, `source: true` marks a source (infeed / generator).
+- `edges` are conductors between two devices (`sourcePort` / `targetPort` default `B` / `T`).
+- Structure is checked by `validateDsl()`; **semantics** live in the designer —
+  `result.designer.validatePower()` reports voltage-level mismatches, busbars without infeed,
+  missing disconnectors next to breakers, and the two 五防 rules (energising an earthing switch,
+  closing onto an earth). `result.designer.applyTopology()` colours energised parts.
+- Give explicit `left` / `top` for real drawings: layout carries engineering meaning
+  (bays in columns, busbars horizontal). Omitting them falls back to a plain grid.
+- Live preview: `examples/power-dsl.html`.
 
 ## Gantt DSL
 
