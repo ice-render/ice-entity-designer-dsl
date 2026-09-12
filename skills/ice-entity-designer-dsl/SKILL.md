@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
-description: Generate JSON-first DSL documents (ER models or flowcharts) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.2.4"
+description: Generate JSON-first DSL documents (ER models, flowcharts, or BPMN 2.0 processes with pools and lanes) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
+version: "1.3.0"
 category: data
 platforms:
   - claude-code
@@ -11,7 +11,7 @@ platforms:
   - gemini-cli
   - other
 metadata:
-  short-description: JSON-first ER + flowchart DSL plus canonical interactive ice-entity-designer editor demo guidance.
+  short-description: JSON-first ER + flowchart + BPMN 2.0 DSL plus canonical interactive ice-entity-designer editor demo guidance.
 ---
 
 # ice-entity-designer-dsl

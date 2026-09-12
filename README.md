@@ -95,6 +95,11 @@ into a container with `parent`. Give coordinates and the compiler is the identit
 omit them and containers are sized from their contents while the flow nodes are laid
 out left-to-right inside their container.
 
+左侧是这份 DSL，右侧是它的渲染结果（`examples/bpmn-dsl.html`）——节点坐标全部省略，
+池高、泳道条带与图元落位都是编译期算出来的：
+
+<img src="https://raw.githubusercontent.com/ice-render/ice-entity-designer-dsl/main/examples/bpmn-dsl.png" alt="BPMN DSL 渲染示例" />
+
 ```js
 const bpmn = {
   schemaVersion: 1,
