@@ -31,6 +31,10 @@ The package contains:
 - browser examples with a JSON editor (`examples/entity-editor-dsl.html`,
   `examples/flowchart-dsl.html`, `examples/bpmn-dsl.html`, `examples/uml-dsl.html`,
   `examples/statechart-dsl.html`, `examples/gantt-dsl.html`)
+- the four new diagram examples (BPMN / UML / statechart / gantt) share
+  `examples/canvas-interactions.js`: canvas fills the preview pane, wheel zooms at the
+  cursor (`ICE.zoomAt`), dragging blank space (or any middle-button drag) pans, plus
+  「适应视图 / 复位视图」 buttons
 
 ## Install
 
@@ -261,6 +265,7 @@ intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / paral
 Open `examples/entity-editor-dsl.html` (ER), `examples/flowchart-dsl.html`
 (flowchart), `examples/bpmn-dsl.html` (BPMN), `examples/uml-dsl.html` (UML),
 `examples/statechart-dsl.html` (statechart) or `examples/gantt-dsl.html` (gantt) after building.
+渲染结果可以滚轮缩放、空白处拖拽平移，工具栏还有「适应视图 / 复位视图」。
 
 ## Agent discovery
 

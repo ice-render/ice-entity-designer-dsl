@@ -25,8 +25,7 @@
       resize: none;
     }
     .preview {
-      padding: 12px;
-      overflow: auto;
+      overflow: hidden;
     }
     button {
       margin: 8px;
@@ -52,6 +51,8 @@
       <div>
         <button id="render">渲染</button>
         <button id="download-svg">导出 SVG</button>
+        <button id="fit">适应视图</button>
+        <button id="reset">复位视图</button>
         <button id="download-text">导出 PlantUML</button>
         <span class="hint">类坐标可省略：缺省时按继承关系分层（父类在上、子类在下）</span>
         <textarea id="dsl">
@@ -91,15 +92,27 @@
 
     <script src="../node_modules/ice-entity-designer/dist/index.umd.js"></script>
     <script src="../dist/index.umd.js"></script>
+    <script src="./canvas-interactions.js"></script>
     <script>
       const textarea = document.getElementById('dsl');
+
+      /** 挂载交互：canvas 铺满可视区 + 滚轮缩放 + 空白/中键拖拽平移 */
+      function mount(result) {
+        window.__dslResult = result;
+        const canvas = document.getElementById('canvas');
+        window.__view = IedCanvasViewport.install({ ice: result.ice, canvas, designer: result.designer });
+        window.__view.fitViewport();
+      }
+
       document.getElementById('render').addEventListener('click', () => {
         const oldCanvas = document.getElementById('canvas');
         const nextCanvas = oldCanvas.cloneNode(false);
         oldCanvas.parentNode.replaceChild(nextCanvas, oldCanvas);
         try {
-          window.__dslResult = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
-          window.__dslErrors = window.__dslResult.designer.validateBpmn();
+          const result = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
+          // 类图示例要跑的是 UML 校验（此前这里误写成了 validateBpmn）
+          window.__dslErrors = result.designer.validateUml();
+          mount(result);
         } catch (error) {
           alert(error.message);
         }
@@ -138,7 +151,10 @@
         URL.revokeObjectURL(url);
       });
 
-      window.__dslResult = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
+      document.getElementById('fit').addEventListener('click', () => window.__view && window.__view.fitViewport());
+      document.getElementById('reset').addEventListener('click', () => window.__view && window.__view.reset());
+
+      mount(ICEDSL.renderDsl('canvas', JSON.parse(textarea.value)));
       window.__dslErrors = window.__dslResult.designer.validateUml();
     </script>
   </body>
