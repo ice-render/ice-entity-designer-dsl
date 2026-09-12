@@ -1,6 +1,6 @@
 {
   "name": "ice-entity-designer-dsl",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "A JSON-first DSL layer for AI agents to drive ice-entity-designer.",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
