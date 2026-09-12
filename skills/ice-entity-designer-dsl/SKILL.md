@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, or gantt schedules) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.3.6"
+version: "1.3.7"
 category: data
 platforms:
   - claude-code
@@ -44,8 +44,8 @@ Start by classifying the request:
 | Business process with pools / lanes / participants as JSON data | `ice-entity-designer-dsl` | one BPMN DSL document (`kind: "bpmn"`) |
 | Static BPMN diagram rendered from a DSL document | `ICEDSL.renderDsl()` | minimal canvas page only when explicitly requested |
 | Interactive ER editor / "make a demo" / "show what the designer can do" | `ice-entity-designer` imperative API | HTML/JS editor page |
-| Interactive flowchart editor | `ice-entity-designer` (`FlowDesigner`) | HTML/JS editor page (see `tests/flowchart-editor.html`) |
-| Interactive BPMN editor | `ice-entity-designer` (`BpmnDesigner`) | HTML/JS editor page (see `tests/bpmn-editor.html`) |
+| Interactive flowchart editor | `ice-entity-designer` (`FlowDesigner`) | HTML/JS editor page (see `examples/flowchart-editor.html`) |
+| Interactive BPMN editor | `ice-entity-designer` (`BpmnDesigner`) | HTML/JS editor page (see `examples/bpmn-editor.html`) |
 | React integration / controlled designer / hooks | `ice-entity-designer/react` | React app |
 | TypeORM schema or code generation | `ice-entity-designer` | `toSchemaObject()` / `toSchemaString()` result |
 
@@ -866,7 +866,7 @@ coalesces per frame), so autosave never writes stale coordinates.
   that do not hit a `FlowNode`.
 
 A complete runnable editor (toolbar + property panel + link mode) lives in
-`ice-entity-designer/tests/flowchart-editor.html`.
+`ice-entity-designer/examples/flowchart-editor.html`.
 
 ## Capability boundary
 
@@ -1176,7 +1176,7 @@ flow.fitViewport();
 `FlowDesigner` mirrors `EntityDesigner`: `nodes` / `edges` / `select()` /
 `updateNode()` / `updateEdge()` / `remove()` / `undo()` / `redo()` / `serialize()` /
 `load()` / `subscribe()`. A complete runnable editor lives in
-`ice-entity-designer/tests/flowchart-editor.html`; a JSON-editor + live preview page
+`ice-entity-designer/examples/flowchart-editor.html`; a JSON-editor + live preview page
 for this DSL lives in `examples/flowchart-dsl.html`.
 
 ### Validation

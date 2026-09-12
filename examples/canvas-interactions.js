@@ -1,7 +1,7 @@
 /**
  * DSL 示例页共用的画布视口交互（UML / 状态机 / 甘特 / BPMN 四页共用一套口径）。
  *
- * 与 ice-entity-designer/tests/canvas-interactions.js 是同一套口径（那边是编辑器示例页，
+ * 与 ice-entity-designer/examples/canvas-interactions.js 是同一套口径（那边是编辑器示例页，
  * 这边是 DSL 渲染示例页）；两处都改了记得对齐。
  *
  * 三件事，全部复用引擎原语，应用层不自己造轮子：
