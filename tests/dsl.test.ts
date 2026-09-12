@@ -570,4 +570,21 @@ describe('ice-entity-designer-dsl · 甘特文档', () => {
     });
     expect(scene.nodes.map((task) => task.row)).toEqual([5, 1]);
   });
+
+  it('编译器不碰日期：排期/关键路径语义属于设计器（回归边界）', () => {
+    // 末端任务手写了一个很晚的日期，编译器必须原样传递。
+    // 归一化（自动排程）与浮时计算（关键路径）是设计器的职责：
+    // 编译期"顺手推一下日期"会让 autoSchedule 的"只推后不提前"失去意义。
+    const scene = compileGanttDsl({
+      kind: 'gantt',
+      nodes: [
+        { id: 'design', start: '2026-03-02', days: 4 },
+        { id: 'test', start: '2026-03-20', days: 3 },
+      ],
+      edges: [{ source: 'design', target: 'test' }],
+      options: { dayWidth: 30, autoSchedule: true },
+    });
+    expect(scene.nodes.map((task) => task.start)).toEqual(['2026-03-02', '2026-03-20']);
+    expect(scene.options).toMatchObject({ dayWidth: 30, autoSchedule: true });
+  });
 });

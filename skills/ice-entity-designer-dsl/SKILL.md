@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, or gantt schedules) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.3.5"
+version: "1.3.6"
 category: data
 platforms:
   - claude-code
@@ -1573,7 +1573,10 @@ dates, and the editor snaps dragged bars back to whole days anyway.
 - Schedule, don't just draw: `options.autoSchedule: true` (or `designer.autoSchedule()`)
   pushes every task to its earliest feasible start (only later, never earlier — a plan
   should not silently pull work forward). `designer.criticalPath()` returns the zero-float
-  chain to highlight; `designer.validateGantt()` reports dependency cycles AND
+  chain to highlight, computed on the earliest-feasible schedule (CPM: a task with
+  predecessors is driven by them, only a task without predecessors anchors on its own
+  `start`, so a hand-written late date on a terminal task never collapses the chain);
+  `designer.validateGantt()` reports dependency cycles AND
   resource conflicts (same `resource` with overlapping dates).
 - `validateDsl()` checks structure (ids, `start` format, `days >= 1`, `progress` in 0..1,
   endpoints); semantics live in the designer — `result.designer.validateGantt()` reports
