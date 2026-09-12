@@ -46,6 +46,7 @@
     <main>
       <div>
         <button id="render">渲染</button>
+        <button id="export-doc">导出当前文档</button>
         <textarea id="dsl">
 {
   "schemaVersion": 1,
@@ -136,5 +137,24 @@
       });
       window.__dslResult = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
     </script>
+    <script>
+      /**
+       * 「导出当前文档」：把画布上（可能已被用户拖动 / 改名 / 分合过）的实例写回成同一份 DSL。
+       * 这就是 toDsl() 的往返：renderDsl() → 用户编辑 → toDsl()，导出的文档可以再渲染回去。
+       */
+      document.getElementById('export-doc').addEventListener('click', (event) => {
+        try {
+          const doc = window.__dslResult.toDsl();
+          document.getElementById('dsl').value = JSON.stringify(doc, null, 2);
+          const button = event.currentTarget;
+          const label = button.textContent;
+          button.textContent = '已导出到左侧';
+          setTimeout(() => (button.textContent = label), 1200);
+        } catch (error) {
+          alert(error.message);
+        }
+      });
+    </script>
+
   </body>
 </html>

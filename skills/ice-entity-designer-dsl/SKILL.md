@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate and round-trip JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, gantt schedules, power one-line diagrams) for ice-entity-designer — render them into editable instances and read user edits back with toDsl(). For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.4.0"
+version: "1.4.1"
 category: data
 platforms:
   - claude-code
@@ -904,6 +904,38 @@ Contract (covered by `tests/roundtrip.test.ts` for all seven kinds):
 
 Use this whenever the user asks "继续改刚才那张图" / "把这张图存成 JSON" / "update the diagram
 we just made": read the current document with `toDsl()`, edit that JSON, render it again.
+
+### Worked loop: generate → user edits → read back → update
+
+```js
+// Turn 1 — you generate the document and hand the user an editable canvas.
+let result = ICEDSL.renderDsl('canvas', doc);
+
+// ... the user drags nodes, renames things, opens a breaker, adds a field ...
+
+// Turn 2 — read back what they actually have, then patch it **by id**.
+const current = result.toDsl();
+const byId = new Map(current.nodes.map((node) => [node.id, node]));
+byId.get('check').title = '库存够吗？';
+byId.get('check').kind = 'decision';
+byId.get('restock').title = '通知补货（自动）';
+const next = { ...current, nodes: [...byId.values()] };
+result = ICEDSL.renderDsl('canvas', next);   // keep this result: it is the new source of truth
+```
+
+Rules that keep this loop from wrecking the user's work:
+
+- **Never rebuild the document from scratch** once the user has touched the canvas. Their
+  positions are now `left`/`top` in `current`; regenerating a coordinate-free document would
+  snap everything back to auto-layout and throw their arrangement away.
+- **Address elements by id, never by array index** — BPMN re-orders containers before the flow
+  elements, and the user may have added or deleted nodes.
+- **Adding** an element is `nodes.push({ id: 'new-step', kind: 'process', title: '…' })`; omit
+  `left`/`top` to let the compiler place it, or give both to place it exactly.
+- **Deleting** is just removing it from `nodes` / `edges`; connections pointing at it must go
+  too (otherwise `validateDsl()` will report a dangling endpoint — call it before rendering).
+- **Always re-render with the patched document** (`validateDsl(next)` first) and keep the new
+  result — that result, not your original `doc`, is what the next turn should read from.
 
 ## Capability boundary
 

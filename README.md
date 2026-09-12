@@ -304,8 +304,9 @@ Open `examples/entity-editor-dsl.html` (ER), `examples/flowchart-dsl.html`
 `examples/power-dsl.html` (power one-line diagram) after building.
 渲染结果可以滚轮缩放、空白处拖拽平移，工具栏还有「适应视图 / 复位视图」。
 
-每个示例页渲染出来的实例都带 `toDsl()`：在浏览器控制台执行
-`window.__dslResult.toDsl()` 就能看到当前的 DSL 文档（改过的位置与语义都在里面）。
+每个示例页都有一个 **「导出当前文档」** 按钮：在画布上拖动 / 改名 / 分合之后点一下，
+左侧 JSON 立刻变成**你改过之后**的那份文档（仍是同一份 DSL，可直接再渲染回去）。
+在控制台执行 `window.__dslResult.toDsl()` 拿到的是同一个结果。
 
 ## Agent discovery
 
