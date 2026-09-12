@@ -2,19 +2,23 @@
 
 JSON-first DSL for AI agents to drive `ice-entity-designer` without learning the imperative canvas API.
 
-One document kind, two shapes:
+One document kind, three shapes:
 
 - **ER document** (`entities` / `relations`): entity-relation models and database schemas.
 - **Flowchart document** (`kind: "flowchart"` with `nodes` / `edges`): process flows,
   decision trees, and algorithms, with optional coordinates (layered auto-layout).
+- **BPMN document** (`kind: "bpmn"` with `nodes` / `edges`): business processes with
+  participants (pools), lanes, events, gateways and message flows. Containers are
+  nodes too, so the document stays a flat list; geometries are optional.
 
 The package contains:
 
-- DSL types and schema (ER + flowchart)
+- DSL types and schema (ER + flowchart + BPMN)
 - structural validator
-- compilers from DSL to Entity/Relation or FlowNode/FlowEdge props
+- compilers from DSL to Entity/Relation or FlowNode/FlowEdge props (shared layered layout)
 - browser runtime that renders DSL through `ice-entity-designer`
-- browser examples with a JSON editor (`examples/entity-editor-dsl.html`, `examples/flowchart-dsl.html`)
+- browser examples with a JSON editor (`examples/entity-editor-dsl.html`,
+  `examples/flowchart-dsl.html`, `examples/bpmn-dsl.html`)
 
 ## Install
 
@@ -84,17 +88,59 @@ Node kinds: `terminator` (start/end pill) / `process` (action, default) / `decis
 (diamond) / `io` (parallelogram). Edge ports are `T` / `R` / `B` / `L` / `C` (default
 `B` → `T`); `linkShape` is `visio` (orthogonal, default) or `bezier`.
 
+## BPMN usage
+
+Pools and lanes are nodes (`kind: "pool"` / `kind: "lane"`); everything else points
+into a container with `parent`. Give coordinates and the compiler is the identity —
+omit them and containers are sized from their contents while the flow nodes are laid
+out left-to-right inside their container.
+
+```js
+const bpmn = {
+  schemaVersion: 1,
+  kind: 'bpmn',
+  nodes: [
+    { id: 'bank', kind: 'pool', title: '银行' },
+    { id: 'accept', kind: 'lane', title: '受理岗', parent: 'bank' },
+    { id: 'risk', kind: 'lane', title: '风控岗', parent: 'bank' },
+    { id: 'submit', kind: 'event', title: '申请提交', eventKind: 'start', parent: 'accept' },
+    { id: 'verify', kind: 'task', title: '身份核验', taskType: 'service', parent: 'accept' },
+    { id: 'ok', kind: 'event', title: '申请通过', eventKind: 'end', parent: 'risk' },
+  ],
+  edges: [
+    { source: 'submit', target: 'verify', label: '受理' },
+    { source: 'verify', target: 'ok' },
+  ],
+};
+
+const result = ICEDSL.renderDsl('canvas', bpmn);
+// result.kind === 'bpmn'; result.designer is a BpmnDesigner
+result.designer.validateBpmn();             // 语义检查：每个池一个开始事件、顺序流不跨池…
+const xml = IED.toBpmnXml(result.designer); // BPMN 2.0 + BPMNDI（互操作格式，不是执行模型）
+```
+
+Node kinds: `pool` / `lane` (containers), `task` (default), `event`, `gateway`,
+`subprocess`, `dataObject`, `annotation`; events carry `eventKind` (start /
+intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / parallel
+/ inclusive / event), tasks carry `taskType` (none / user / service / script / send
+/ receive / manual). Edge `type`: `sequence` (default) / `message` (across pools) /
+`association` (data objects, annotations); sequence flows also take `condition` and
+`isDefault`.
+
 ## API
 
-- `validateDsl(dsl)` —— ER / flowchart documents (dispatches on `kind`); `validateFlowDsl(dsl)` for flowcharts only
+- `validateDsl(dsl)` —— ER / flowchart / BPMN documents (dispatches on `kind`); `validateFlowDsl(dsl)` / `validateBpmnDsl(dsl)` for one kind only
 - `compileDsl(dsl)` —— ER document → `Entity` / `Relation` props
 - `compileFlowDsl(dsl)` —— flowchart document → `FlowNode` / `FlowEdge` props (with layered auto-layout)
-- `renderDsl(canvasOrId, dsl)` —— renders either kind, returns `{ kind, ice, designer }`
+- `compileBpmnDsl(dsl)` —— BPMN document → `FlowNode` / `FlowEdge` props (container auto-geometry + container-scoped auto-layout)
+- `layeredLayout(items, edges, options)` —— the shared layered layout (`direction: "vertical" | "horizontal"`)
+- `renderDsl(canvasOrId, dsl)` —— renders any kind, returns `{ kind, ice, designer }`
 - `DSL_SCHEMA_VERSION`
 
 ## Example
 
-Open `examples/entity-editor-dsl.html` (ER) or `examples/flowchart-dsl.html` (flowchart) after building.
+Open `examples/entity-editor-dsl.html` (ER), `examples/flowchart-dsl.html`
+(flowchart) or `examples/bpmn-dsl.html` (BPMN) after building.
 
 ## Agent discovery
 

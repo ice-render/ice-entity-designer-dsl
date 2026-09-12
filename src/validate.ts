@@ -1,17 +1,166 @@
-import { isFlowDsl } from './types';
-import type { DslDocument, DslFlowDocument, DslFlowNodeKind, DslPort, DslValidationResult } from './types';
+import { isBpmnDsl, isFlowDsl } from './types';
+import type {
+  DslBpmnDocument,
+  DslDocument,
+  DslFlowDocument,
+  DslFlowNodeKind,
+  DslPort,
+  DslValidationResult,
+} from './types';
 
 export const DSL_SCHEMA_VERSION = 1;
 
 const FLOW_NODE_KINDS: DslFlowNodeKind[] = ['terminator', 'process', 'decision', 'io'];
 const FLOW_PORTS: DslPort[] = ['T', 'R', 'B', 'L', 'C'];
 
-/** 校验一份 DSL 文档：ER 文档（entities/relations）或流程图文档（kind: 'flowchart' + nodes/edges） */
+const BPMN_NODE_KINDS = [
+  'pool',
+  'lane',
+  'task',
+  'event',
+  'gateway',
+  'subprocess',
+  'dataObject',
+  'annotation',
+];
+const BPMN_EVENT_KINDS = ['start', 'intermediate', 'end'];
+const BPMN_TRIGGERS = ['none', 'message', 'timer', 'error', 'terminate'];
+const BPMN_GATEWAY_TYPES = ['exclusive', 'parallel', 'inclusive', 'event'];
+const BPMN_TASK_TYPES = ['none', 'user', 'service', 'script', 'send', 'receive', 'manual'];
+const BPMN_FLOW_TYPES = ['sequence', 'message', 'association'];
+
+/**
+ * 校验一份 DSL 文档：ER（entities/relations）、流程图（kind: 'flowchart'）
+ * 或 BPMN（kind: 'bpmn'，nodes/edges + 池/泳道容器）。
+ */
 export function validateDsl(dsl: DslDocument): DslValidationResult {
+  if (isBpmnDsl(dsl)) {
+    return validateBpmnDsl(dsl);
+  }
   if (isFlowDsl(dsl)) {
     return validateFlowDsl(dsl);
   }
   return validateErDsl(dsl as any);
+}
+
+/**
+ * BPMN 文档校验：结构 + 取值词汇表 + 端点必须存在。
+ *
+ * 这里只做**结构**校验（离线可判定、错误信息稳定）。语义检查（每个池至少一个开始事件、
+ * 顺序流不得跨池、可达性等）交给 `BpmnDesigner.validateBpmn()` —— 那是同一套规则，
+ * 不要在 DSL 里再实现一遍。
+ */
+export function validateBpmnDsl(dsl: DslBpmnDocument): DslValidationResult {
+  const errors: string[] = [];
+  if (!dsl || typeof dsl !== 'object' || Array.isArray(dsl)) {
+    return { valid: false, errors: ['DSL root must be an object'] };
+  }
+  if (dsl.schemaVersion !== undefined && dsl.schemaVersion !== DSL_SCHEMA_VERSION) {
+    errors.push(`Unsupported schemaVersion: ${dsl.schemaVersion}`);
+  }
+
+  const ids = new Set<string>();
+  const kinds = new Map<string, string>();
+  if (!Array.isArray(dsl.nodes)) {
+    errors.push('nodes must be an array');
+  } else {
+    dsl.nodes.forEach((node, index) => {
+      const prefix = `nodes[${index}]`;
+      if (!node || typeof node !== 'object') {
+        errors.push(`${prefix} must be an object`);
+        return;
+      }
+      if (typeof node.id !== 'string' || !node.id.trim()) {
+        errors.push(`${prefix}.id must be a non-empty string`);
+      } else if (ids.has(node.id)) {
+        errors.push(`${prefix}.id is duplicated: ${node.id}`);
+      } else {
+        ids.add(node.id);
+        kinds.set(node.id, node.kind || 'task');
+      }
+      if (node.kind !== undefined && BPMN_NODE_KINDS.indexOf(node.kind) === -1) {
+        errors.push(`${prefix}.kind must be one of ${BPMN_NODE_KINDS.join('/')}`);
+      }
+      ['left', 'top', 'width', 'height'].forEach((key) => {
+        const value = (node as any)[key];
+        if (value !== undefined && typeof value !== 'number') {
+          errors.push(`${prefix}.${key} must be a number when present`);
+        }
+      });
+      const enums: Array<[string, string[]]> = [
+        ['eventKind', BPMN_EVENT_KINDS],
+        ['trigger', BPMN_TRIGGERS],
+        ['gatewayType', BPMN_GATEWAY_TYPES],
+        ['taskType', BPMN_TASK_TYPES],
+      ];
+      enums.forEach(([key, allowed]) => {
+        const value = (node as any)[key];
+        if (value !== undefined && allowed.indexOf(value) === -1) {
+          errors.push(`${prefix}.${key} must be one of ${allowed.join('/')}`);
+        }
+      });
+    });
+
+    // parent 指向必须存在，且「容器的容器」只能是池（泳道里不能再放泳道/池）
+    dsl.nodes.forEach((node, index) => {
+      if (!node || typeof node !== 'object' || node.parent === undefined) {
+        return;
+      }
+      const prefix = `nodes[${index}]`;
+      if (typeof node.parent !== 'string' || !node.parent.trim()) {
+        errors.push(`${prefix}.parent must be a non-empty string when present`);
+        return;
+      }
+      if (!ids.has(node.parent)) {
+        errors.push(`${prefix}.parent must reference an existing node id`);
+        return;
+      }
+      if (node.parent === node.id) {
+        errors.push(`${prefix}.parent must not reference itself`);
+        return;
+      }
+      const parentKind = kinds.get(node.parent);
+      if (node.kind === 'pool') {
+        errors.push(`${prefix}.parent is not allowed on a pool (池是最外层容器)`);
+      } else if (node.kind === 'lane' && parentKind !== 'pool') {
+        errors.push(`${prefix}.parent must reference a pool`);
+      } else if (parentKind !== 'pool' && parentKind !== 'lane') {
+        errors.push(`${prefix}.parent must reference a pool or a lane`);
+      }
+    });
+  }
+
+  if (dsl.edges !== undefined && !Array.isArray(dsl.edges)) {
+    errors.push('edges must be an array when present');
+  } else {
+    (dsl.edges || []).forEach((edge, index) => {
+      const prefix = `edges[${index}]`;
+      if (!edge || typeof edge !== 'object') {
+        errors.push(`${prefix} must be an object`);
+        return;
+      }
+      if (typeof edge.source !== 'string' || !edge.source.trim() || !ids.has(edge.source)) {
+        errors.push(`${prefix}.source must reference an existing node id`);
+      }
+      if (typeof edge.target !== 'string' || !edge.target.trim() || !ids.has(edge.target)) {
+        errors.push(`${prefix}.target must reference an existing node id`);
+      }
+      const flowType = edge.type !== undefined ? edge.type : edge.flowType;
+      if (flowType !== undefined && BPMN_FLOW_TYPES.indexOf(flowType) === -1) {
+        errors.push(`${prefix}.type must be one of ${BPMN_FLOW_TYPES.join('/')}`);
+      }
+      if (edge.label !== undefined && typeof edge.label !== 'string') {
+        errors.push(`${prefix}.label must be a string when present`);
+      }
+      if (edge.condition !== undefined && typeof edge.condition !== 'string') {
+        errors.push(`${prefix}.condition must be a string when present`);
+      }
+      if (edge.linkShape !== undefined && edge.linkShape !== 'visio' && edge.linkShape !== 'bezier') {
+        errors.push(`${prefix}.linkShape must be "visio" or "bezier" when present`);
+      }
+    });
+  }
+  return { valid: errors.length === 0, errors };
 }
 
 /** 流程图文档校验：结构 + 端点必须指向已存在的节点（与 ER 的关系校验同一口径） */

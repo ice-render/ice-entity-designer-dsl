@@ -1,8 +1,9 @@
-import { ICE, EntityDesigner, ICELayeredLayout, FlowDesigner } from 'ice-entity-designer';
-import { isFlowDsl } from '../types';
-import type { DslDocument, DslErDocument, DslFlowDocument } from '../types';
+import { ICE, EntityDesigner, ICELayeredLayout, FlowDesigner, BpmnDesigner } from 'ice-entity-designer';
+import { isBpmnDsl, isFlowDsl } from '../types';
+import type { DslBpmnDocument, DslDocument, DslErDocument, DslFlowDocument } from '../types';
 import { compileDsl } from '../compiler/dslToScene';
 import { compileFlowDsl } from '../compiler/flowToScene';
+import { compileBpmnDsl } from '../compiler/bpmnToScene';
 import { validateDsl } from '../validate';
 
 export type RenderErDslResult = {
@@ -17,7 +18,13 @@ export type RenderFlowDslResult = {
   designer: any;
 };
 
-export type RenderDslResult = RenderErDslResult | RenderFlowDslResult;
+export type RenderBpmnDslResult = {
+  kind: 'bpmn';
+  ice: any;
+  designer: any;
+};
+
+export type RenderDslResult = RenderErDslResult | RenderFlowDslResult | RenderBpmnDslResult;
 
 function positionLinks(designer: any, scene: any, defaultRouteType: string): any[] {
   const entityBox = new Map();
@@ -96,10 +103,57 @@ export function renderDsl(canvasOrId: any, dsl: DslDocument): RenderDslResult {
   if (!validation.valid) {
     throw new Error(validation.errors.join('\n'));
   }
+  if (isBpmnDsl(dsl)) {
+    return renderBpmnDsl(canvasOrId, dsl);
+  }
   if (isFlowDsl(dsl)) {
     return renderFlowDsl(canvasOrId, dsl);
   }
   return renderErDsl(canvasOrId, dsl as DslErDocument);
+}
+
+/**
+ * 渲染 BPMN 文档：池/泳道也是节点（`parent` 声明归属），由 `BpmnDesigner` 按几何真嵌套，
+ * 因此拖动池/泳道时内部图元与挂在它们上面的连线会一起走（引擎的容器 + 递归 AFTER_MOVE）。
+ *
+ * 语义校验沿用编辑器那一套：`designer.validateBpmn()`；BPMN XML 互操作用
+ * `ice-entity-designer` 的 `toBpmnXml(designer)` / `fromBpmnXml(...)`。
+ */
+export function renderBpmnDsl(canvasOrId: any, dsl: DslBpmnDocument): RenderBpmnDslResult {
+  const scene = compileBpmnDsl(dsl);
+  const options: any = scene.options || {};
+  const ice: any = new ICE().init(canvasOrId);
+  const designer: any = new BpmnDesigner(ice);
+
+  scene.nodes.forEach((node: any) => {
+    const props: any = {
+      id: node.id,
+      title: node.title,
+      left: node.left,
+      top: node.top,
+      width: node.width,
+      height: node.height,
+    };
+    ['eventKind', 'trigger', 'gatewayType', 'taskType', 'fillColor', 'strokeColor'].forEach((key) => {
+      if (node[key] !== undefined) {
+        props[key] = node[key];
+      }
+    });
+    designer.createNode(node.kind, props);
+  });
+  scene.edges.forEach((edge: any) => {
+    designer.createEdge(edge);
+  });
+  designer.select(null);
+
+  if (options.viewport) {
+    ice.setViewport(options.viewport.scale, options.viewport.tx, options.viewport.ty);
+  } else if (options.fitViewport !== false) {
+    designer.fitViewport(options.fitViewportPadding);
+  }
+  // 渲染期创建的节点/连线不该占用撤销栈
+  designer.resetHistory();
+  return { kind: 'bpmn', ice, designer };
 }
 
 /** 渲染流程图文档：节点缺坐标时已由 compileFlowDsl 做过分层自动布局 */

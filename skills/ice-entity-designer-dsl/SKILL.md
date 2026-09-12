@@ -17,12 +17,14 @@ metadata:
 # ice-entity-designer-dsl
 
 Use this skill when the requested artifact is a **JSON DSL document** that can be
-consumed or rendered by `ice-entity-designer`. Two document kinds are supported:
+consumed or rendered by `ice-entity-designer`. Three document kinds are supported:
 
 - **ER document** (`entities` / `relations`): an Entity-Relation model or
   database schema (the original mode of this skill).
 - **Flowchart document** (`kind: "flowchart"` with `nodes` / `edges`): a process
   flow, decision tree, or algorithm diagram.
+- **BPMN document** (`kind: "bpmn"` with `nodes` / `edges`): a business process
+  with participants (pools), lanes, events, gateways and message flows.
 
 This skill is **not** the interactive `ice-entity-designer` editor. If the
 user asks for a runnable page, a visual demo, or an editor they can click and
@@ -39,8 +41,11 @@ Start by classifying the request:
 | Static ER diagram rendered from a known DSL document | `ICEDSL.renderDsl()` | minimal canvas page only when explicitly requested |
 | Flowchart / process flow / decision tree as JSON data | `ice-entity-designer-dsl` | one flowchart DSL document (`kind: "flowchart"`) |
 | Static flowchart rendered from a DSL document | `ICEDSL.renderDsl()` | minimal canvas page only when explicitly requested |
+| Business process with pools / lanes / participants as JSON data | `ice-entity-designer-dsl` | one BPMN DSL document (`kind: "bpmn"`) |
+| Static BPMN diagram rendered from a DSL document | `ICEDSL.renderDsl()` | minimal canvas page only when explicitly requested |
 | Interactive ER editor / "make a demo" / "show what the designer can do" | `ice-entity-designer` imperative API | HTML/JS editor page |
 | Interactive flowchart editor | `ice-entity-designer` (`FlowDesigner`) | HTML/JS editor page (see `tests/flowchart-editor.html`) |
+| Interactive BPMN editor | `ice-entity-designer` (`BpmnDesigner`) | HTML/JS editor page (see `tests/bpmn-editor.html`) |
 | React integration / controlled designer / hooks | `ice-entity-designer/react` | React app |
 | TypeORM schema or code generation | `ice-entity-designer` | `toSchemaObject()` / `toSchemaString()` result |
 
@@ -1194,6 +1199,146 @@ for this DSL lives in `examples/flowchart-dsl.html`.
   place the graph, then adjust only the nodes that need a manual position.
 - Using `linkShape: "bezier"` for a dense flow: orthogonal (`visio`) routing keeps
   branch lines readable.
+
+## BPMN DSL
+
+Use this mode when the artifact is a **business process across participants**:
+approval workflows, order fulfillment across departments, anything that would be
+drawn with pools, lanes, events and gateways. The document is the same
+"nodes + edges" model as the flowchart kind — only the vocabulary changes, and
+pools/lanes are nodes too (declared with `kind` and linked by `parent`).
+
+Do not use this for a plain single-actor flow: if there are no participants and no
+lane split, a flowchart document is the shorter answer.
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "kind": "bpmn",                       // required discriminator
+  "nodes": [
+    { "id": "bank", "kind": "pool", "title": "银行" },                 // left/top/width/height optional
+    { "id": "accept", "kind": "lane", "title": "受理岗", "parent": "bank" },
+    { "id": "risk", "kind": "lane", "title": "风控岗", "parent": "bank" },
+    { "id": "submit", "kind": "event", "title": "申请提交", "eventKind": "start", "parent": "accept" },
+    { "id": "verify", "kind": "task", "title": "身份核验", "taskType": "service", "parent": "accept" },
+    { "id": "gateway", "kind": "gateway", "title": "是否通过", "gatewayType": "exclusive", "parent": "risk" }
+  ],
+  "edges": [
+    { "source": "submit", "target": "verify", "label": "受理" },
+    { "source": "verify", "target": "gateway" }
+  ],
+  "options": { "fitViewport": true, "gapX": 90, "gapY": 60 }
+}
+```
+
+### Node kinds
+
+| `kind` | Shape | Default size | Notes |
+| --- | --- | --- | --- |
+| `pool` | rectangle with a top title band | 900 × 260 | the participant; outermost container |
+| `lane` | rectangle with a left title band | 900 × 130 | `parent` must be a pool |
+| `task` | rounded rectangle + type icon | 180 × 90 | default when `kind` is omitted |
+| `event` | circle | 56 × 56 | `eventKind`: `start` / `intermediate` / `end`; `trigger`: `none` / `message` / `timer` / `error` / `terminate` |
+| `gateway` | diamond + symbol | 70 × 70 | `gatewayType`: `exclusive` / `parallel` / `inclusive` / `event` |
+| `subprocess` | rounded rectangle | 200 × 110 | same `taskType` vocabulary as `task` |
+| `dataObject` | page with a folded corner | 130 × 80 | attach with an `association` edge |
+| `annotation` | open bracket, dashed | 200 × 80 | attach with an `association` edge |
+
+`taskType` (on `task` and `subprocess`): `none` (default) / `user` / `service` /
+`script` / `send` / `receive` / `manual`. The vocabulary and the palette match the
+interactive editor's property panel, so a document round-trips through the editor
+without loss.
+
+### Pools and lanes (containers)
+
+- Every non-container node belongs to a container through `parent` — a flow node's
+  `parent` may be a `lane` or a `pool`; a `lane`'s `parent` must be a `pool`.
+- `parent` is optional. Nodes with coordinates are nested **geometrically** by the
+  designer anyway (innermost container whose content area holds the node's center),
+  so editor exports and BPMN XML imports need no `parent` at all.
+- When coordinates are omitted, the compiler sizes the containers from their
+  contents: a lane becomes its children's bounding box plus the left title band and
+  padding (never thinner than the default), the pool becomes its lanes stacked with
+  the top title band, and pools without coordinates are stacked top to bottom.
+- The title bands are **not** part of the content area (pool band is 32px on top,
+  lane band is 32px on the left). Do not put children in a band: they would be
+  re-assigned to another container.
+- Children of a container are laid out left-to-right in layers. An explicit
+  `left`/`top` on **every** node of a container skips that container's auto-layout.
+
+### Edges
+
+| Field | Meaning |
+| --- | --- |
+| `source` / `target` | node ids; both must exist |
+| `type` | `sequence` (default), `message` (dashed, arrow at target — use it **only** across pools), `association` (dotted — data objects and annotations) |
+| `flowType` | alias of `type` (kept for compatibility; `type` wins) |
+| `label` | text on the line, e.g. `"受理"`, `"通过"` |
+| `condition` | condition expression on a sequence flow (drawn on the line) |
+| `isDefault` | default sequence flow (drawn with the slash marker) |
+| `linkShape` | `visio` (default, orthogonal) or `bezier` |
+
+### Rendering
+
+```js
+const result = ICEDSL.renderDsl('canvas', bpmnDoc);
+// result.kind === 'bpmn'
+// result.designer is a BpmnDesigner (extends FlowDesigner)
+```
+
+BPMN documents fit the viewport by default (`options.fitViewport !== false`); pass
+`options.viewport: { scale, tx, ty }` to control the camera yourself. A JSON-editor
+plus live preview page for this DSL lives in `examples/bpmn-dsl.html`.
+
+### Validation
+
+`validateDsl()` dispatches on `kind`. For BPMN documents it checks structure only:
+
+- `nodes` is an array; node ids are non-empty and unique
+- `kind` is one of the eight BPMN kinds; `eventKind` / `trigger` / `gatewayType` /
+  `taskType` values are from the vocabulary above
+- `left` / `top` / `width` / `height`, when present, are numbers
+- `parent`, when present, references an existing node; a lane's parent must be a
+  pool, and a pool cannot have a parent
+- every edge `source` / `target` references an existing node id; `type` is a known
+  flow type
+
+**Semantic** rules live in the designer, not in the DSL validator — call
+`result.designer.validateBpmn()` after rendering to get BPMN-specific issues:
+
+- every pool needs at least one start event
+- a sequence flow must not cross pools (use a message flow between participants)
+- a message flow should connect different pools
+- gateways need the outgoing branches their type implies
+- every node should be reachable from a start event
+
+### BPMN 2.0 XML interop
+
+The DSL renders into `BpmnDesigner`, which ships the XML bridge — there is no second
+serializer:
+
+```js
+const xml = IED.toBpmnXml(result.designer);              // BPMN 2.0 + BPMNDI layout
+const imported = IED.fromBpmnXml(xml, result.designer);  // rebuild the designer from XML
+```
+
+Scope: process, collaboration/participants, lanes, the eight shapes above, the three
+flow types, and DI layout. It is a **layout-preserving exchange format**, not a full
+BPMN execution model: conditions travel as text, and there are no engine semantics
+(no token simulation, no boundary-event subscriptions, no multi-instance metadata).
+
+### BPMN anti-patterns
+
+- Using `sequence` for a line that crosses pools: the validator flags it; a line
+  between participants is a `message` flow.
+- Putting a lane inside a lane, or a pool inside a pool: containers are exactly two
+  levels — pool → lane → flow node.
+- Placing a node in a title band (pool top 32px / lane left 32px): it will be
+  re-assigned to whatever container actually contains its center.
+- Emitting only the flow nodes and forgetting the pools: without a pool the diagram
+  has no participants and BPMN semantics are not checkable.
+- Mixing `kind: "bpmn"` nodes into a `kind: "flowchart"` document: the vocabulary is
+  not shared; pick one discriminator per document.
 
 ## Worked example: compact e-commerce model
 

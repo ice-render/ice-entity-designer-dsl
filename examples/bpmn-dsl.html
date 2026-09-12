@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>ice-entity-designer-dsl BPMN example</title>
+  <style>
+    body {
+      margin: 0;
+      font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 460px 1fr;
+      height: 100vh;
+    }
+    textarea {
+      width: 100%;
+      height: calc(100vh - 60px);
+      box-sizing: border-box;
+      border: 0;
+      border-right: 1px solid #e2e8f0;
+      padding: 12px;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      resize: none;
+    }
+    .preview {
+      padding: 12px;
+      overflow: auto;
+    }
+    button {
+      margin: 8px;
+      padding: 7px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #ffffff;
+    }
+    canvas {
+      display: block;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #ffffff;
+    }
+    .hint {
+      margin: 0 8px;
+      color: #64748b;
+      font-size: 12px;
+    }
+  </style>
+  <body>
+    <main>
+      <div>
+        <button id="render">渲染</button>
+        <span class="hint">池/泳道/图元坐标可省略：缺省时容器自动几何 + 容器内自动排布</span>
+        <textarea id="dsl">
+{
+  "schemaVersion": 1,
+  "kind": "bpmn",
+  "nodes": [
+    { "id": "bank", "kind": "pool", "title": "银行" },
+    { "id": "accept", "kind": "lane", "title": "受理岗", "parent": "bank" },
+    { "id": "risk", "kind": "lane", "title": "风控岗", "parent": "bank" },
+    { "id": "customer", "kind": "pool", "title": "客户" },
+    { "id": "applicant", "kind": "lane", "title": "申请人", "parent": "customer" },
+
+    { "id": "submit", "kind": "event", "title": "申请提交", "eventKind": "start", "parent": "accept" },
+    { "id": "verify", "kind": "task", "title": "身份核验", "taskType": "service", "parent": "accept" },
+    { "id": "credit", "kind": "task", "title": "征信查询", "taskType": "service", "parent": "risk" },
+    { "id": "review", "kind": "task", "title": "人工审批", "taskType": "user", "parent": "risk" },
+    { "id": "gateway", "kind": "gateway", "title": "是否通过", "gatewayType": "exclusive", "parent": "risk" },
+    { "id": "approve", "kind": "task", "title": "发卡", "taskType": "service", "parent": "risk" },
+    { "id": "inform", "kind": "task", "title": "通知客户", "taskType": "send", "parent": "risk" },
+    { "id": "approved", "kind": "event", "title": "申请通过", "eventKind": "end", "parent": "risk" },
+    { "id": "rejected", "kind": "event", "title": "申请结束", "eventKind": "end", "parent": "risk" },
+    { "id": "report", "kind": "dataObject", "title": "征信报告", "parent": "risk" },
+    { "id": "note", "kind": "annotation", "title": "额度 < 6000 转人工", "parent": "risk" },
+
+    { "id": "need", "kind": "event", "title": "产生用卡需求", "eventKind": "start", "parent": "applicant" },
+    { "id": "apply", "kind": "task", "title": "提交信用卡申请", "taskType": "user", "parent": "applicant" }
+  ],
+  "edges": [
+    { "source": "submit", "target": "verify", "label": "受理" },
+    { "source": "verify", "target": "credit" },
+    { "source": "credit", "target": "review" },
+    { "source": "review", "target": "gateway", "label": "需人工" },
+    { "source": "gateway", "target": "approve", "label": "通过", "condition": "评分 >= 600" },
+    { "source": "gateway", "target": "inform", "label": "拒绝", "isDefault": true },
+    { "source": "approve", "target": "approved" },
+    { "source": "inform", "target": "rejected" },
+    { "source": "credit", "target": "report", "type": "association" },
+    { "source": "note", "target": "review", "type": "association" },
+    { "source": "need", "target": "apply" },
+    { "source": "apply", "target": "submit", "type": "message", "label": "提交申请" },
+    { "source": "inform", "target": "apply", "type": "message", "label": "结果通知" }
+  ]
+}
+        </textarea>
+      </div>
+      <div class="preview">
+        <canvas id="canvas" width="1100" height="820"></canvas>
+      </div>
+    </main>
+
+    <script src="../node_modules/ice-entity-designer/dist/index.umd.js"></script>
+    <script src="../dist/index.umd.js"></script>
+    <script>
+      const textarea = document.getElementById('dsl');
+      document.getElementById('render').addEventListener('click', () => {
+        const oldCanvas = document.getElementById('canvas');
+        const nextCanvas = oldCanvas.cloneNode(false);
+        oldCanvas.parentNode.replaceChild(nextCanvas, oldCanvas);
+        try {
+          window.__dslResult = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
+          window.__dslErrors = window.__dslResult.designer.validateBpmn();
+        } catch (error) {
+          alert(error.message);
+        }
+      });
+      window.__dslResult = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
+      window.__dslErrors = window.__dslResult.designer.validateBpmn();
+    </script>
+  </body>
+</html>
