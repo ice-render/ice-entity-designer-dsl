@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
-description: Generate JSON-first ER DSL documents for ice-entity-designer. For interactive ER editor demos or pages, route to ice-entity-designer instead.
-version: "1.1.0"
+description: Generate JSON-first DSL documents (ER models or flowcharts) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
+version: "1.2.0"
 category: data
 platforms:
   - claude-code
@@ -11,14 +11,18 @@ platforms:
   - gemini-cli
   - other
 metadata:
-  short-description: JSON-first ER DSL plus canonical interactive ice-entity-designer editor demo guidance.
+  short-description: JSON-first ER + flowchart DSL plus canonical interactive ice-entity-designer editor demo guidance.
 ---
 
 # ice-entity-designer-dsl
 
-Use this skill when the requested artifact is a **JSON ER DSL document**: a
-machine-readable Entity-Relation model or database schema that can be consumed
-or rendered by `ice-entity-designer`.
+Use this skill when the requested artifact is a **JSON DSL document** that can be
+consumed or rendered by `ice-entity-designer`. Two document kinds are supported:
+
+- **ER document** (`entities` / `relations`): an Entity-Relation model or
+  database schema (the original mode of this skill).
+- **Flowchart document** (`kind: "flowchart"` with `nodes` / `edges`): a process
+  flow, decision tree, or algorithm diagram.
 
 This skill is **not** the interactive `ice-entity-designer` editor. If the
 user asks for a runnable page, a visual demo, or an editor they can click and
@@ -33,7 +37,10 @@ Start by classifying the request:
 | --- | --- | --- |
 | ER model / schema as JSON data | `ice-entity-designer-dsl` | one JSON DSL document |
 | Static ER diagram rendered from a known DSL document | `ICEDSL.renderDsl()` | minimal canvas page only when explicitly requested |
+| Flowchart / process flow / decision tree as JSON data | `ice-entity-designer-dsl` | one flowchart DSL document (`kind: "flowchart"`) |
+| Static flowchart rendered from a DSL document | `ICEDSL.renderDsl()` | minimal canvas page only when explicitly requested |
 | Interactive ER editor / "make a demo" / "show what the designer can do" | `ice-entity-designer` imperative API | HTML/JS editor page |
+| Interactive flowchart editor | `ice-entity-designer` (`FlowDesigner`) | HTML/JS editor page (see `tests/flowchart-editor.html`) |
 | React integration / controlled designer / hooks | `ice-entity-designer/react` | React app |
 | TypeORM schema or code generation | `ice-entity-designer` | `toSchemaObject()` / `toSchemaString()` result |
 
@@ -951,10 +958,123 @@ Node:
 import { renderDsl } from 'ice-entity-designer-dsl';
 ```
 
-`renderDsl()` returns `{ ice, designer }`, but it is only the DSL bootstrap
-path. Do not use it to build an editor demo; for that, create `EntityDesigner`
-directly as shown in [Interactive editor demo
-requirements](#interactive-editor-demo-requirements).
+`renderDsl()` returns `{ kind, ice, designer }` (`kind` is `"entity"` or
+`"flowchart"`), but it is only the DSL bootstrap path. Do not use it to build an
+editor demo; for that, create `EntityDesigner` / `FlowDesigner` directly as shown in
+[Interactive editor demo requirements](#interactive-editor-demo-requirements).
+
+## Flowchart DSL
+
+Use this mode when the artifact is a **process flow, decision tree, algorithm, or
+onboarding flow** (start/end, actions, conditions with yes/no branches). Keep ER
+requests in the entity mode above; do not mix the two document kinds in one file.
+
+### Document shape
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "kind": "flowchart",          // required discriminator
+  "nodes": [
+    { "id": "start", "kind": "terminator", "title": "开始" },
+    { "id": "check", "kind": "decision", "title": "库存充足？" },
+    { "id": "done", "kind": "terminator", "title": "结束" }
+    // left / top / width / height / fillColor / strokeColor are all optional
+  ],
+  "edges": [
+    { "source": "start", "target": "check" },
+    { "source": "check", "target": "done", "label": "是" }
+  ],
+  "options": { "fitViewport": true, "gapX": 90, "gapY": 90 }
+}
+```
+
+### Node kinds
+
+| `kind` | Shape | Default size | Use for |
+| --- | --- | --- | --- |
+| `terminator` | rounded pill | 180 × 60 | start / end |
+| `process` | rounded rectangle | 220 × 80 | an action or step (default when `kind` is omitted) |
+| `decision` | diamond | 200 × 120 | a condition with labeled branches |
+| `io` | parallelogram | 220 × 80 | input / output / notification |
+
+`title` is the visible text (`name` is accepted as an alias). Colors come from the
+kind preset; override with `fillColor` / `strokeColor` only when the user asks for a
+specific palette.
+
+### Edges
+
+| Field | Meaning |
+| --- | --- |
+| `source` / `target` | node ids; both must exist (the validator rejects dangling endpoints) |
+| `label` | branch text, e.g. `"是"` / `"否"` / `"else"` |
+| `sourcePort` / `targetPort` | attachment side: `T` `R` `B` `L` `C`; default `B` → `T` (out of the bottom, into the top) |
+| `linkShape` | `visio` (default, orthogonal) or `bezier` |
+
+Use `sourcePort: "R"` + `targetPort: "L"` for a side branch that leaves a decision
+node horizontally and lands on a node placed to its right.
+
+### Layout
+
+Coordinates are optional. If **any** node omits `left`/`top`, the compiler lays the
+whole graph out in layers:
+
+- layer 0 = nodes with no incoming edge; every other node = max(predecessor layer) + 1
+- nodes of one layer sit side by side (`gapX`, default 90), layers stack downward (`gapY`, default 90)
+- the result is offset so its top-left corner sits at (80, 80)
+
+Set `options.layout: "none"` to keep exactly the coordinates you provide (any node
+without coordinates then falls back to 0,0). Supply coordinates when the user asks
+for a specific arrangement or when reproducing a diagram from an image.
+
+### Rendering
+
+```js
+const result = ICEDSL.renderDsl('canvas', flowchartDoc);
+// result.kind === 'flowchart'
+// result.designer is a FlowDesigner (imperative API below)
+```
+
+Flowchart documents fit the viewport by default (`options.fitViewport !== false`);
+pass `options.viewport: { scale, tx, ty }` to control the camera yourself.
+
+### Imperative equivalent (interactive editor)
+
+```js
+const ice = new IED.ICE().init('canvas-1');
+const flow = new IED.FlowDesigner(ice);
+const start = flow.createNode('terminator', { title: '开始' });
+const check = flow.createNode('decision', { title: '库存充足？' });
+flow.createEdge({ sourceId: start.state.id, targetId: check.state.id, label: '是' });
+flow.fitViewport();
+```
+
+`FlowDesigner` mirrors `EntityDesigner`: `nodes` / `edges` / `select()` /
+`updateNode()` / `updateEdge()` / `remove()` / `undo()` / `redo()` / `serialize()` /
+`load()` / `subscribe()`. A complete runnable editor lives in
+`ice-entity-designer/tests/flowchart-editor.html`; a JSON-editor + live preview page
+for this DSL lives in `examples/flowchart-dsl.html`.
+
+### Validation
+
+`validateDsl()` dispatches on `kind`. For flowchart documents it checks:
+
+- `nodes` is an array; node ids are non-empty and unique
+- `kind`, when present, is one of `terminator` / `process` / `decision` / `io`
+- `left` / `top` / `width` / `height`, when present, are numbers
+- every edge `source` / `target` references an existing node id
+- `sourcePort` / `targetPort` are one of `T` `R` `B` `L` `C`; `linkShape` is `visio` or `bezier`
+
+### Flowchart anti-patterns
+
+- Emitting flowchart nodes as `entities` (or ER tables as `nodes`) — the two
+  document kinds are discriminated by `kind: "flowchart"` and are not interchangeable.
+- Drawing the branches as two unlabeled edges: a `decision` node needs `label` on its
+  outgoing edges (`是` / `否`), otherwise the diagram is ambiguous.
+- Hand-computing coordinates for a long flow: omit them and let the layered layout
+  place the graph, then adjust only the nodes that need a manual position.
+- Using `linkShape: "bezier"` for a dense flow: orthogonal (`visio`) routing keeps
+  branch lines readable.
 
 ## Worked example: compact e-commerce model
 
@@ -1044,6 +1164,46 @@ requirements](#interactive-editor-demo-requirements).
 }
 ```
 
+## Worked example: order-fulfillment flowchart
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "flowchart",
+  "nodes": [
+    { "id": "start", "kind": "terminator", "title": "开始" },
+    { "id": "browse", "kind": "process", "title": "浏览商品" },
+    { "id": "submit", "kind": "process", "title": "提交订单" },
+    { "id": "stock", "kind": "decision", "title": "库存充足？" },
+    { "id": "pay", "kind": "process", "title": "创建支付单" },
+    { "id": "paid", "kind": "decision", "title": "支付成功？" },
+    { "id": "ship", "kind": "process", "title": "安排发货" },
+    { "id": "done", "kind": "terminator", "title": "结束" },
+    { "id": "restock", "kind": "io", "title": "通知补货" },
+    { "id": "closed", "kind": "process", "title": "关闭订单" },
+    { "id": "failed", "kind": "terminator", "title": "结束（未成交）" }
+  ],
+  "edges": [
+    { "source": "start", "target": "browse" },
+    { "source": "browse", "target": "submit" },
+    { "source": "submit", "target": "stock" },
+    { "source": "stock", "target": "pay", "label": "是" },
+    { "source": "stock", "target": "restock", "label": "否", "sourcePort": "R", "targetPort": "L" },
+    { "source": "restock", "target": "failed" },
+    { "source": "pay", "target": "paid" },
+    { "source": "paid", "target": "ship", "label": "是" },
+    { "source": "paid", "target": "closed", "label": "否", "sourcePort": "R", "targetPort": "L" },
+    { "source": "closed", "target": "failed" },
+    { "source": "ship", "target": "done" }
+  ],
+  "options": { "fitViewport": true, "gapX": 120, "gapY": 90 }
+}
+```
+
+No coordinates are given, so the layered layout places the 11 nodes: the main chain
+reads top-to-bottom, while 通知补货 and 关闭订单 land on the right as side branches of
+their decision nodes.
+
 ## Anti-patterns
 
 Do not:
@@ -1056,7 +1216,7 @@ Do not:
 
 ## Output checklist
 
-Before returning, verify:
+Before returning an **ER** document, verify:
 
 - root contains only `schemaVersion`, `entities`, `relations`, `layout`, and
   `options`
@@ -1065,6 +1225,17 @@ Before returning, verify:
 - every field has a non-empty `name`
 - every relation references an existing entity id
 - `many-to-many` relations include `joinTableName`
+- the document is valid JSON with no trailing commas
+
+Before returning a **flowchart** document, verify:
+
+- root contains `kind: "flowchart"` plus `nodes` / `edges` (and optionally `options`)
+- every node id is unique and non-empty; every `kind` is one of
+  `terminator` / `process` / `decision` / `io`
+- every edge references existing node ids
+- every branch out of a `decision` node carries a `label` (`是` / `否`, `yes` / `no`)
+- the flow starts at a `terminator` (start) and ends at one or more `terminator` (end) nodes
+- coordinates are either omitted entirely (auto layout) or provided for every node
 - the document is valid JSON with no trailing commas
 
 ## Rules for JSON DSL mode
@@ -1077,6 +1248,11 @@ When the requested artifact is JSON DSL data, follow these rules:
 - Preserve constraints and cardinalities supplied by the user.
 - Use `layered` or `grid` when no coordinates are provided.
 - Validate before rendering with `validateDsl()`.
+
+When the request is a flowchart (process flow, decision tree, algorithm), emit a
+flowchart document instead: `kind: "flowchart"` with `nodes` / `edges`, omit
+coordinates unless the user asked for a specific arrangement, and label every branch
+of a `decision` node. See [Flowchart DSL](#flowchart-dsl).
 
 For interactive editor or demo requests, follow
 [Interactive editor demo build guide](#interactive-editor-demo-build-guide)

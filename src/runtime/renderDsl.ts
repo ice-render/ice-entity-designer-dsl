@@ -1,12 +1,23 @@
-import { ICE, EntityDesigner, ICELayeredLayout } from 'ice-entity-designer';
-import type { DslDocument } from '../types';
+import { ICE, EntityDesigner, ICELayeredLayout, FlowDesigner } from 'ice-entity-designer';
+import { isFlowDsl } from '../types';
+import type { DslDocument, DslErDocument, DslFlowDocument } from '../types';
 import { compileDsl } from '../compiler/dslToScene';
+import { compileFlowDsl } from '../compiler/flowToScene';
 import { validateDsl } from '../validate';
 
-export type RenderDslResult = {
+export type RenderErDslResult = {
+  kind: 'entity';
   ice: any;
   designer: any;
 };
+
+export type RenderFlowDslResult = {
+  kind: 'flowchart';
+  ice: any;
+  designer: any;
+};
+
+export type RenderDslResult = RenderErDslResult | RenderFlowDslResult;
 
 function positionLinks(designer: any, scene: any, defaultRouteType: string): any[] {
   const entityBox = new Map();
@@ -74,12 +85,50 @@ function fitViewport(ice: any, designer: any, padding: number): void {
   ice.setViewport(scale, tx, ty);
 }
 
+/**
+ * 渲染一份 DSL 文档：ER 文档（entities/relations）或流程图文档（kind: 'flowchart'）。
+ *
+ * 两种文档共用同一个入口，返回的 `kind` 表明实际渲染的是哪一类，
+ * `designer` 分别是 `EntityDesigner` / `FlowDesigner` 实例。
+ */
 export function renderDsl(canvasOrId: any, dsl: DslDocument): RenderDslResult {
   const validation = validateDsl(dsl);
   if (!validation.valid) {
     throw new Error(validation.errors.join('\n'));
   }
+  if (isFlowDsl(dsl)) {
+    return renderFlowDsl(canvasOrId, dsl);
+  }
+  return renderErDsl(canvasOrId, dsl as DslErDocument);
+}
 
+/** 渲染流程图文档：节点缺坐标时已由 compileFlowDsl 做过分层自动布局 */
+export function renderFlowDsl(canvasOrId: any, dsl: DslFlowDocument): RenderFlowDslResult {
+  const scene = compileFlowDsl(dsl);
+  const options: any = scene.options || {};
+  const ice: any = new ICE().init(canvasOrId);
+  const designer: any = new FlowDesigner(ice);
+
+  scene.nodes.forEach((node: any) => {
+    designer.createNode(node.kind, node);
+  });
+  scene.edges.forEach((edge: any) => {
+    designer.createEdge(edge);
+  });
+  designer.select(null);
+
+  if (options.viewport) {
+    ice.setViewport(options.viewport.scale, options.viewport.tx, options.viewport.ty);
+  } else if (options.fitViewport !== false) {
+    // 流程图默认适应视图（ER 的默认是不动视图，保持既有行为）
+    designer.fitViewport(options.fitViewportPadding);
+  }
+  // 渲染期创建的节点/连线不该占用撤销栈
+  designer.resetHistory();
+  return { kind: 'flowchart', ice, designer };
+}
+
+function renderErDsl(canvasOrId: any, dsl: DslErDocument): RenderErDslResult {
   const scene = compileDsl(dsl);
   const options: any = scene.options || {};
   const ice: any = new ICE().init(canvasOrId);
@@ -106,5 +155,5 @@ export function renderDsl(canvasOrId: any, dsl: DslDocument): RenderDslResult {
     fitViewport(ice, designer, options.fitViewportPadding);
   }
 
-  return { ice, designer };
+  return { kind: 'entity', ice, designer };
 }

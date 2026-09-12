@@ -1,4 +1,5 @@
-import type { DslDocument, DslEntity, DslRelation } from '../types';
+import { isFlowDsl } from '../types';
+import type { DslErDocument, DslEntity, DslRelation } from '../types';
 
 export type CompiledScene = {
   entities: Array<Record<string, any>>;
@@ -15,7 +16,14 @@ function relationType(relation: DslRelation): string {
   return relation.relationType || relation.type || 'one-to-many';
 }
 
-export function compileDsl(dsl: DslDocument): CompiledScene {
+/** ER 文档 → Entity / Relation 构造参数（流程图请用 compileFlowDsl） */
+export function compileDsl(dsl: DslErDocument): CompiledScene {
+  if (isFlowDsl(dsl)) {
+    throw new Error('compileDsl() 只处理 ER 文档；流程图文档请使用 compileFlowDsl()');
+  }
+  if (!dsl || !Array.isArray(dsl.entities)) {
+    throw new Error('ER 文档必须包含 entities 数组');
+  }
   const entities = dsl.entities.map((entity) => ({
     id: entity.id,
     entityName: entityName(entity),

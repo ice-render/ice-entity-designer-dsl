@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>ice-entity-designer-dsl flowchart example</title>
+  <style>
+    body {
+      margin: 0;
+      font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      height: 100vh;
+    }
+    textarea {
+      width: 100%;
+      height: calc(100vh - 60px);
+      box-sizing: border-box;
+      border: 0;
+      border-right: 1px solid #e2e8f0;
+      padding: 12px;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      resize: none;
+    }
+    .preview {
+      padding: 12px;
+      overflow: auto;
+    }
+    button {
+      margin: 8px;
+      padding: 7px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #ffffff;
+    }
+    canvas {
+      display: block;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #ffffff;
+    }
+    .hint {
+      margin: 0 8px;
+      color: #64748b;
+      font-size: 12px;
+    }
+  </style>
+  <body>
+    <main>
+      <div>
+        <button id="render">渲染</button>
+        <span class="hint">节点坐标可省略：缺省时按分层自动布局</span>
+        <textarea id="dsl">
+{
+  "schemaVersion": 1,
+  "kind": "flowchart",
+  "nodes": [
+    { "id": "start", "kind": "terminator", "title": "开始" },
+    { "id": "browse", "kind": "process", "title": "浏览商品" },
+    { "id": "submit", "kind": "process", "title": "提交订单" },
+    { "id": "stock", "kind": "decision", "title": "库存充足？" },
+    { "id": "pay", "kind": "process", "title": "创建支付单" },
+    { "id": "paid", "kind": "decision", "title": "支付成功？" },
+    { "id": "ship", "kind": "process", "title": "安排发货" },
+    { "id": "done", "kind": "terminator", "title": "结束" },
+    { "id": "restock", "kind": "io", "title": "通知补货" },
+    { "id": "closed", "kind": "process", "title": "关闭订单" },
+    { "id": "failed", "kind": "terminator", "title": "结束（未成交）" }
+  ],
+  "edges": [
+    { "source": "start", "target": "browse" },
+    { "source": "browse", "target": "submit" },
+    { "source": "submit", "target": "stock" },
+    { "source": "stock", "target": "pay", "label": "是" },
+    { "source": "stock", "target": "restock", "label": "否", "sourcePort": "R", "targetPort": "L" },
+    { "source": "restock", "target": "failed" },
+    { "source": "pay", "target": "paid" },
+    { "source": "paid", "target": "ship", "label": "是" },
+    { "source": "paid", "target": "closed", "label": "否", "sourcePort": "R", "targetPort": "L" },
+    { "source": "closed", "target": "failed" },
+    { "source": "ship", "target": "done" }
+  ]
+}
+        </textarea>
+      </div>
+      <div class="preview">
+        <canvas id="canvas" width="1200" height="900"></canvas>
+      </div>
+    </main>
+
+    <script src="../node_modules/ice-entity-designer/dist/index.umd.js"></script>
+    <script src="../dist/index.umd.js"></script>
+    <script>
+      const textarea = document.getElementById('dsl');
+      document.getElementById('render').addEventListener('click', () => {
+        const oldCanvas = document.getElementById('canvas');
+        const nextCanvas = oldCanvas.cloneNode(false);
+        oldCanvas.parentNode.replaceChild(nextCanvas, oldCanvas);
+        try {
+          window.__dslResult = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
+        } catch (error) {
+          alert(error.message);
+        }
+      });
+      window.__dslResult = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
+    </script>
+  </body>
+</html>
