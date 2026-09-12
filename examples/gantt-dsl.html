@@ -16,6 +16,7 @@
       <div>
         <button id="render">渲染</button>
         <button id="download-svg">导出 SVG</button>
+        <button id="download-text">导出 Mermaid</button>
         <button id="fit">适应视图</button>
         <button id="reset">复位视图</button>
         <span class="hint">甘特文档不写坐标：横轴是日期，纵轴是声明顺序；options.autoSchedule=true 会按依赖把排期推到最早可行</span>
@@ -66,6 +67,23 @@
         const a = document.createElement('a');
         a.href = url;
         a.download = 'release-gantt.svg';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      document.getElementById('download-text').addEventListener('click', () => {
+        const result = window.__dslResult;
+        if (!result) {
+          return;
+        }
+        // 文本互操作：Mermaid gantt 可直接贴进 Markdown / 文档站 / PR 描述
+        const text = IED.toMermaidGantt(result.designer, { title: '移动端 2.0 发布排期' });
+        window.__exportedText = text;
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'release-gantt.mmd';
         a.click();
         URL.revokeObjectURL(url);
       });

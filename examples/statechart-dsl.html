@@ -16,6 +16,7 @@
       <div>
         <button id="render">渲染</button>
         <button id="download-svg">导出 SVG</button>
+        <button id="download-text">导出 PlantUML</button>
         <button id="fit">适应视图</button>
         <button id="reset">复位视图</button>
         <span class="hint">状态坐标可省略：按转移流向自左而右排布；复合状态自动装下子状态</span>
@@ -69,6 +70,23 @@
         const a = document.createElement('a');
         a.href = url;
         a.download = 'order-statechart.svg';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      document.getElementById('download-text').addEventListener('click', () => {
+        const result = window.__dslResult;
+        if (!result) {
+          return;
+        }
+        // 文本互操作：PlantUML 状态图可直接贴进 Wiki / Markdown / 代码评审
+        const text = IED.toPlantUmlState(result.designer, { title: 'DSL 生成的状态机' });
+        window.__exportedText = text;
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'order-statechart.puml';
         a.click();
         URL.revokeObjectURL(url);
       });

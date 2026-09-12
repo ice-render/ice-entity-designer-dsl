@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, or gantt schedules) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.3.7"
+version: "1.3.8"
 category: data
 platforms:
   - claude-code
@@ -1514,6 +1514,11 @@ Labels are composed automatically: `event [guard] / action` with missing parts o
   missing initial state, out-edges from a final state, isolated states and states
   unreachable from the initial one (a composite counts as reachable when its children are).
 - `ICEDSL.renderDsl('canvas', chartDoc)` → `{ kind: 'statechart', designer: StatechartDesigner }`.
+- Text interop: `IED.toPlantUmlState(designer)` / `IED.fromPlantUmlState(text, designer)`
+  speak the PlantUML state-diagram subset (pseudo-states as `[*]`, composites as nested
+  `state X { ... }` blocks, transition labels split back into event / guard / action).
+  Prefer this over inventing your own format when the user wants something to paste into
+  a wiki or a code review.
 - Prefer a statechart over a flowchart when the artifact is a **lifecycle with retries /
   cancellation / nested phases**: pseudo-states and guards say things a flowchart cannot.
 - A JSON-editor plus live preview page lives in `examples/statechart-dsl.html`.
@@ -1583,6 +1588,11 @@ dates, and the editor snaps dragged bars back to whole days anyway.
   dependency cycles.
 - `ICEDSL.renderDsl('canvas', ganttDoc)` → `{ kind: 'gantt', designer: GanttDesigner }`;
   `options.dayWidth` sets the zoom (the editor can also change it live).
+- Text interop: `IED.toMermaidGantt(designer)` / `IED.fromMermaidGantt(text, designer)`
+  speak the Mermaid gantt subset — `section` maps to `resource`, a single predecessor is
+  written as `after <id>` (Mermaid draws the arrow), while multiple predecessors or
+  buffered schedules fall back to explicit dates plus `%% task` comments (Mermaid ignores
+  comments, so the rendering stays correct and nothing is lost round-trip).
 - A JSON-editor plus live preview page lives in `examples/gantt-dsl.html`.
 
 ### Gantt anti-patterns
