@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate JSON-first DSL documents (ER models or flowcharts) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.2.2"
+version: "1.2.3"
 category: data
 platforms:
   - claude-code
@@ -776,6 +776,12 @@ flow.serialize();                      // 流程图快照
 Node kinds and their presets (`FLOW_NODE_KINDS`): `terminator` (start/end pill),
 `process` (action, default), `decision` (diamond), `io` (parallelogram). Edge ports are
 `T`/`R`/`B`/`L`/`C`, default `B` → `T`.
+
+Editable style props (all persisted in the snapshot): node `fillColor`,
+`strokeColor`, `textColor`, `fontSize`; edge `style.strokeStyle` (line + arrow fill),
+`style.lineWidth`, `labelStyle.fillStyle` (branch-label color). `updateNode()` /
+`updateEdge()` apply them immediately — remember `FlowNode.applyPatch()` rebuilds the
+shape/label children, so it is safe to change colors at runtime.
 
 ### React
 
