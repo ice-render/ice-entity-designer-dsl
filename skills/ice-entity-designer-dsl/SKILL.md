@@ -868,6 +868,39 @@ coalesces per frame), so autosave never writes stale coordinates.
 A complete runnable editor (toolbar + property panel + link mode) lives in
 `ice-entity-designer/examples/flowchart-editor.html`.
 
+## Reading edits back: `toDsl()`
+
+`renderDsl()` returns `{ kind, ice, designer, toDsl }`. When the user (or a later session)
+edits the canvas — moves a node, renames it, opens a switch, adds a field — call `toDsl()` to
+get the **same DSL document shape** back, instead of the engine's private scene snapshot:
+
+```js
+const result = ICEDSL.renderDsl('canvas', doc);
+// ... the user drags / renames / toggles switches / edits fields ...
+const edited = result.toDsl();       // same kinds, same ids, absolute coordinates
+ICEDSL.validateDsl(edited);          // always valid
+ICEDSL.renderDsl('canvas', edited);  // renders again, ids and positions unchanged
+```
+
+Standalone form: `toDsl(resultOrDesigner, { kind? })`; `kind` is inferred from the elements
+when omitted.
+
+Contract (covered by `tests/roundtrip.test.ts` for all seven kinds):
+
+- **ids survive** — the ids you authored come back in the same order, so a follow-up turn can
+  keep referencing `customer` / `qf1` / `check` instead of guessing at generated names;
+- **coordinates are absolute** — nested containers (BPMN pools/lanes, statechart composite
+  states) are unwound along the parent chain, so what the user dragged is what you read;
+- **DSL vocabulary only** — engine internals (`zIndex`, matrices, derived children) never leak
+  into the document;
+- **valid and serializable** — the result always passes `validateDsl()`, never contains
+  `undefined`, and survives `JSON.parse(JSON.stringify(doc))`;
+- **idempotent rendering** — re-rendering the exported document reproduces the same node ids
+  and positions.
+
+Use this whenever the user asks "继续改刚才那张图" / "把这张图存成 JSON" / "update the diagram
+we just made": read the current document with `toDsl()`, edit that JSON, render it again.
+
 ## Capability boundary
 
 This SKILL is the right choice for:

@@ -25,6 +25,7 @@ export { compileGanttDsl } from './compiler/ganttToScene';
 export { compilePowerDsl } from './compiler/powerToScene';
 export type { CompiledGanttScene, CompiledGanttTask, CompiledGanttDependency } from './compiler/ganttToScene';
 export { renderDsl, renderFlowDsl, renderBpmnDsl, renderUmlDsl, renderStatechartDsl, renderGanttDsl, renderPowerDsl } from './runtime/renderDsl';
+export { toDsl } from './runtime/exportDsl';
 export type {
   RenderDslResult,
   RenderErDslResult,

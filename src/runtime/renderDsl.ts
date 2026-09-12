@@ -18,41 +18,54 @@ import { compileStatechartDsl } from '../compiler/statechartToScene';
 import { compileGanttDsl } from '../compiler/ganttToScene';
 import { compilePowerDsl } from '../compiler/powerToScene';
 import { validateDsl } from '../validate';
+import { toDsl } from './exportDsl';
 
 export type RenderErDslResult = {
   kind: 'entity';
   ice: any;
   designer: any;
+  /** 把当前（可能已被用户编辑过的）实例写回同一份 DSL 文档 */
+  toDsl: () => any;
 };
 
 export type RenderFlowDslResult = {
   kind: 'flowchart';
   ice: any;
   designer: any;
+  /** 把当前（可能已被用户编辑过的）实例写回同一份 DSL 文档 */
+  toDsl: () => any;
 };
 
 export type RenderBpmnDslResult = {
   kind: 'bpmn';
   ice: any;
   designer: any;
+  /** 把当前（可能已被用户编辑过的）实例写回同一份 DSL 文档 */
+  toDsl: () => any;
 };
 
 export type RenderUmlDslResult = {
   kind: 'uml';
   ice: any;
   designer: any;
+  /** 把当前（可能已被用户编辑过的）实例写回同一份 DSL 文档 */
+  toDsl: () => any;
 };
 
 export type RenderGanttDslResult = {
   kind: 'gantt';
   ice: any;
   designer: any;
+  /** 把当前（可能已被用户编辑过的）实例写回同一份 DSL 文档 */
+  toDsl: () => any;
 };
 
 export type RenderStatechartDslResult = {
   kind: 'statechart';
   ice: any;
   designer: any;
+  /** 把当前（可能已被用户编辑过的）实例写回同一份 DSL 文档 */
+  toDsl: () => any;
 };
 
 export type RenderDslResult =
@@ -62,6 +75,11 @@ export type RenderDslResult =
   | RenderUmlDslResult
   | RenderStatechartDslResult
   | RenderGanttDslResult;
+
+/** 每个渲染结果都自带 `toDsl()`：把用户改过的实例立刻写回同一份 DSL 文档 */
+function withDsl<T extends { kind: string; ice: any; designer: any }>(result: T): T & { toDsl: () => any } {
+  return Object.assign(result, { toDsl: () => toDsl(result) });
+}
 
 function positionLinks(designer: any, scene: any, defaultRouteType: string): any[] {
   const entityBox = new Map();
@@ -202,7 +220,7 @@ export function renderGanttDsl(canvasOrId: any, dsl: DslGanttDocument): RenderGa
     designer.fitViewport(options.fitViewportPadding);
   }
   designer.resetHistory();
-  return { kind: 'gantt', ice, designer };
+  return withDsl({ kind: 'gantt', ice, designer });
 }
 
 /**
@@ -228,6 +246,9 @@ export function renderPowerDsl(canvasOrId: any, dsl: DslPowerDocument): any {
   const created = new Map<string, any>();
   scene.nodes.forEach((node: any) => {
     const symbol = designer.createSymbol(node.kind, {
+      // DSL 里的 id 必须透传：否则往返之后 Agent 拿到的 id 全是随机 UUID，引用不上
+      id: node.id,
+      title: node.title,
       name: node.title,
       voltageLevel: node.voltageLevel,
       left: node.left,
@@ -268,7 +289,7 @@ export function renderPowerDsl(canvasOrId: any, dsl: DslPowerDocument): any {
     designer.fitViewport(options.fitViewportPadding);
   }
   designer.resetHistory();
-  return { kind: 'power', ice, designer };
+  return withDsl({ kind: 'power', ice, designer });
 }
 
 export function renderStatechartDsl(canvasOrId: any, dsl: DslStatechartDocument): RenderStatechartDslResult {
@@ -299,7 +320,7 @@ export function renderStatechartDsl(canvasOrId: any, dsl: DslStatechartDocument)
     designer.fitViewport(options.fitViewportPadding);
   }
   designer.resetHistory();
-  return { kind: 'statechart', ice, designer };
+  return withDsl({ kind: 'statechart', ice, designer });
 }
 
 /**
@@ -338,7 +359,7 @@ export function renderUmlDsl(canvasOrId: any, dsl: DslUmlDocument): RenderUmlDsl
     designer.fitViewport(options.fitViewportPadding);
   }
   designer.resetHistory();
-  return { kind: 'uml', ice, designer };
+  return withDsl({ kind: 'uml', ice, designer });
 }
 
 /**
@@ -382,7 +403,7 @@ export function renderBpmnDsl(canvasOrId: any, dsl: DslBpmnDocument): RenderBpmn
   }
   // 渲染期创建的节点/连线不该占用撤销栈
   designer.resetHistory();
-  return { kind: 'bpmn', ice, designer };
+  return withDsl({ kind: 'bpmn', ice, designer });
 }
 
 /** 渲染流程图文档：节点缺坐标时已由 compileFlowDsl 做过分层自动布局 */
@@ -408,7 +429,7 @@ export function renderFlowDsl(canvasOrId: any, dsl: DslFlowDocument): RenderFlow
   }
   // 渲染期创建的节点/连线不该占用撤销栈
   designer.resetHistory();
-  return { kind: 'flowchart', ice, designer };
+  return withDsl({ kind: 'flowchart', ice, designer });
 }
 
 function renderErDsl(canvasOrId: any, dsl: DslErDocument): RenderErDslResult {
@@ -438,5 +459,5 @@ function renderErDsl(canvasOrId: any, dsl: DslErDocument): RenderErDslResult {
     fitViewport(ice, designer, options.fitViewportPadding);
   }
 
-  return { kind: 'entity', ice, designer };
+  return withDsl({ kind: 'entity', ice, designer });
 }

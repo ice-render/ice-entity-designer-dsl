@@ -269,6 +269,31 @@ intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / paral
 - Export: `result.designer.toSvg(options)` (flowchart / BPMN) or `IED.exportSvg(result.ice, options)`; `options` = `{ area: 'content' | 'viewport', padding, scale, background, includeTools }`. The SVG is regenerated from the component tree + path commands, so it matches the canvas (geometry, styles, opacity, shadows, link labels) and can be rasterised to PNG/PDF by any external tool.
 - `DSL_SCHEMA_VERSION`
 
+## Round-trip: render → edit → `toDsl()`
+
+`renderDsl()` 返回的对象自带 `toDsl()`，用来把**用户改过的实例**写回成同一份 DSL 文档：
+
+```js
+const result = ICEDSL.renderDsl('canvas', doc);
+
+// 用户在画布上拖动 / 改名 / 分合 / 增删……
+result.designer.updateNode('check', { title: '库存够吗？', left: 500, top: 480 });
+
+const edited = result.toDsl();        // 同一份 DSL：位置与语义改动都在
+ICEDSL.validateDsl(edited).valid;     // true —— 导出结果永远能过校验
+ICEDSL.renderDsl('canvas', edited);   // 也能直接再渲染一遍
+```
+
+单独使用时是 `toDsl(resultOrDesigner, { kind? })`（不传 `kind` 时按图元自动判别）。
+
+契约（7 种 `kind` 都有测试兜底）：
+
+- **id 保真**：Agent 产出时用的 `id` 原样带回，顺序不变，方便下一轮迭代引用；
+- **坐标是绝对坐标**：嵌套容器（BPMN 池 / 泳道、状态机复合状态）的相对坐标已沿父链还原；
+- **只导出 DSL 词汇表里的字段**：引擎内部字段（zIndex、变换矩阵等）不外泄；
+- **必过校验、必须可序列化**：结果里没有 `undefined`，`JSON.parse(JSON.stringify(doc))` 无损往返；
+- **再渲染等价**：把导出的文档再渲染一遍，节点 id 与位置与上一遍一致。
+
 ## Example
 
 Open `examples/entity-editor-dsl.html` (ER), `examples/flowchart-dsl.html`
@@ -276,6 +301,9 @@ Open `examples/entity-editor-dsl.html` (ER), `examples/flowchart-dsl.html`
 `examples/statechart-dsl.html` (statechart), `examples/gantt-dsl.html` (gantt) or
 `examples/power-dsl.html` (power one-line diagram) after building.
 渲染结果可以滚轮缩放、空白处拖拽平移，工具栏还有「适应视图 / 复位视图」。
+
+每个示例页渲染出来的实例都带 `toDsl()`：在浏览器控制台执行
+`window.__dslResult.toDsl()` 就能看到当前的 DSL 文档（改过的位置与语义都在里面）。
 
 ## Agent discovery
 
