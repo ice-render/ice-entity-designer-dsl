@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate JSON-first DSL documents (ER models, flowcharts, or BPMN 2.0 processes with pools and lanes) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.3.0"
+version: "1.3.1"
 category: data
 platforms:
   - claude-code
@@ -1289,6 +1289,30 @@ const result = ICEDSL.renderDsl('canvas', bpmnDoc);
 BPMN documents fit the viewport by default (`options.fitViewport !== false`); pass
 `options.viewport: { scale, tx, ty }` to control the camera yourself. A JSON-editor
 plus live preview page for this DSL lives in `examples/bpmn-dsl.html`.
+
+### Exporting the rendered result (SVG)
+
+Both flowchart and BPMN designers can export a **vector** SVG of what they render —
+use this whenever the user asks for an image file, a printable figure, or something
+to hand to a design tool. Do not screenshot the canvas: that is a raster snapshot
+that blurs when scaled.
+
+```js
+const result = ICEDSL.renderDsl('canvas', bpmnDoc);
+const svg = result.designer.toSvg();                                  // content-fit, transparent
+const svg = result.designer.toSvg({ background: '#fff', padding: 16 });
+const svg = result.designer.toSvg({ area: 'viewport' });              // exactly what is on screen
+const { svg, width, height } = IED.exportSvgResult(result.ice, {});   // needs the pixel size too
+```
+
+`options`: `area` (`content` | `viewport`), `padding`, `scale`, `background`,
+`includeTools` (editor handles/guides are excluded by default). The SVG is
+regenerated from the component tree and path commands, so it matches the canvas
+(geometry, colours, radii, gradients, opacity, shadows, link labels); text is
+aligned identically but glyph rasterisation differs slightly from canvas. For
+server-side rendering (no browser) use `ICE.headless()` and the same `toSvg()`;
+rasterise the SVG to PNG/PDF with any external tool (`resvg`, `sharp`,
+`rsvg-convert`, headless Chrome).
 
 ### Validation
 

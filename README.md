@@ -122,6 +122,7 @@ const result = ICEDSL.renderDsl('canvas', bpmn);
 // result.kind === 'bpmn'; result.designer is a BpmnDesigner
 result.designer.validateBpmn();             // 语义检查：每个池一个开始事件、顺序流不跨池…
 const xml = IED.toBpmnXml(result.designer); // BPMN 2.0 + BPMNDI（互操作格式，不是执行模型）
+const svg = result.designer.toSvg();        // 矢量 SVG（与画布同一口径，放大不糊）
 ```
 
 Node kinds: `pool` / `lane` (containers), `task` (default), `event`, `gateway`,
@@ -140,6 +141,7 @@ intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / paral
 - `compileBpmnDsl(dsl)` —— BPMN document → `FlowNode` / `FlowEdge` props (container auto-geometry + container-scoped auto-layout)
 - `layeredLayout(items, edges, options)` —— the shared layered layout (`direction: "vertical" | "horizontal"`)
 - `renderDsl(canvasOrId, dsl)` —— renders any kind, returns `{ kind, ice, designer }`
+- Export: `result.designer.toSvg(options)` (flowchart / BPMN) or `IED.exportSvg(result.ice, options)`; `options` = `{ area: 'content' | 'viewport', padding, scale, background, includeTools }`. The SVG is regenerated from the component tree + path commands, so it matches the canvas (geometry, styles, opacity, shadows, link labels) and can be rasterised to PNG/PDF by any external tool.
 - `DSL_SCHEMA_VERSION`
 
 ## Example

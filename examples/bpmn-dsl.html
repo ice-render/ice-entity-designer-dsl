@@ -51,6 +51,7 @@
     <main>
       <div>
         <button id="render">渲染</button>
+        <button id="download-svg">导出 SVG</button>
         <span class="hint">池/泳道/图元坐标可省略：缺省时容器自动几何 + 容器内自动排布</span>
         <textarea id="dsl">
 {
@@ -116,6 +117,23 @@
           alert(error.message);
         }
       });
+      document.getElementById('download-svg').addEventListener('click', () => {
+        const result = window.__dslResult;
+        if (!result) {
+          return;
+        }
+        // 渲染出来的 designer 直接能导出矢量（与应用层同一套 API，DSL 不另造导出）
+        const svg = result.designer.toSvg({ padding: 16, background: '#ffffff' });
+        window.__exportedSvg = svg;
+        const blob = new Blob([svg], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'bpmn-dsl.svg';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
       window.__dslResult = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
       window.__dslErrors = window.__dslResult.designer.validateBpmn();
     </script>
