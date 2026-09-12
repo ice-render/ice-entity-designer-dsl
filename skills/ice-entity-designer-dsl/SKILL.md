@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate JSON-first DSL documents (ER models or flowcharts) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.2.1"
+version: "1.2.2"
 category: data
 platforms:
   - claude-code
@@ -748,6 +748,93 @@ ref.current?.loadProject(snapshot);
 
 The React side panel can read the shared instance with
 `useEntityDesigner()`.
+
+## Flowchart editor (imperative + React)
+
+Use this path when the user wants a **flowchart they can edit** (drag nodes, wire
+branches, edit labels). Do not reach for `EntityDesigner` (that is ER only) and do not
+ship a static `ICEDSL.renderDsl()` viewer when an editor was requested.
+
+### Imperative API
+
+```js
+const ice = new IED.ICE().init('canvas-1');
+const flow = new IED.FlowDesigner(ice);
+
+const start = flow.createNode('terminator', { title: '开始' });       // 起止
+const check = flow.createNode('decision', { title: '库存充足？' });    // 判定
+const done = flow.createNode('process', { left: 600, top: 400 });     // 处理
+
+flow.createEdge({ sourceId: check.state.id, targetId: done.state.id, label: '是' });
+flow.createEdge({ sourceId: check.state.id, targetId: start.state.id, label: '否', sourcePort: 'R', targetPort: 'L' });
+
+flow.fitViewport();                    // 适应视图
+flow.subscribe((snapshot) => save(snapshot));  // 任何模型变更（含拖拽）
+flow.serialize();                      // 流程图快照
+```
+
+Node kinds and their presets (`FLOW_NODE_KINDS`): `terminator` (start/end pill),
+`process` (action, default), `decision` (diamond), `io` (parallelogram). Edge ports are
+`T`/`R`/`B`/`L`/`C`, default `B` → `T`.
+
+### React
+
+```tsx
+import { useRef } from 'react';
+import { FlowDesignerCanvas, useFlowDesigner } from 'ice-entity-designer/react';
+import type { FlowDesignerHandle } from 'ice-entity-designer/react';
+
+function Stats() {
+  const flow = useFlowDesigner();
+  return <span>{flow ? `${flow.nodes.length} 个节点 / ${flow.edges.length} 条连线` : '…'}</span>;
+}
+
+export default function FlowEditor() {
+  const ref = useRef<FlowDesignerHandle>(null);
+  return (
+    <FlowDesignerCanvas
+      ref={ref}
+      width={900}
+      height={700}
+      defaultValue={flowJson}
+      onChange={({ snapshot, counts }) => save(snapshot, counts)}
+      onError={({ error }) => console.error(error)}
+    >
+      <Stats />
+    </FlowDesignerCanvas>
+  );
+}
+```
+
+The handle mirrors `EntityDesignerHandle`: `addNode(kind, props)` / `connect(...)` /
+`updateNode` / `updateEdge` / `remove` / `load` / `undo` / `redo` / `serialize` /
+`toSnapshot` / `fitViewport`. `onChange` also fires while a node is dragged on the
+canvas (the designer subscribes to the engine's `BEFORE_MOVE` / `AFTER_MOVE` and
+coalesces per frame), so autosave never writes stale coordinates.
+
+### Canvas interaction contract (learned the hard way)
+
+- **Wheel zoom:** call the engine primitive `ice.zoomAt(offsetX, offsetY, factor, min, max)`
+  inside a `wheel` listener registered with `{ passive: false }`. Never hand-roll the
+  `screenToWorld` + translate math.
+- **Pan:** not an engine feature — blank-space left drag or middle-button drag that
+  shifts `tx`/`ty` via `ice.setViewport(scale, tx + dx, ty + dy)`, gated by
+  `ice.hitTest()` so node drags keep working.
+- **Property panel:** never rebuild the whole panel DOM on every model change. A panel
+  that does `innerHTML = ''` on each change destroys the native `<input type="color">`
+  mid-interaction, which reads as "changing the color does nothing". Rebuild only when
+  the selected object changes; otherwise sync control values in place (skip the focused
+  control).
+- **Panel clicks must not deselect:** the engine's event interceptor is global, so
+  clicks on your own panel arrive on `ice.evtBus` as `mousedown` with no `param.component`.
+  Only clear the selection when the event target is really the canvas
+  (`evt.originalEvent.target === canvas`).
+- **Link mode:** toggle a flag, then two canvas clicks (source → target) create the edge
+  with `createEdge({ sourceId, targetId, sourcePort, targetPort, label })`; ignore clicks
+  that do not hit a `FlowNode`.
+
+A complete runnable editor (toolbar + property panel + link mode) lives in
+`ice-entity-designer/tests/flowchart-editor.html`.
 
 ## Capability boundary
 
