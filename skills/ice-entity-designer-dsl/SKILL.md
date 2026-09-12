@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
-description: Generate JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, or statecharts) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.3.3"
+description: Generate JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, or gantt schedules) for ice-entity-designer. For interactive editor demos or pages, route to ice-entity-designer instead.
+version: "1.3.4"
 category: data
 platforms:
   - claude-code
@@ -11,7 +11,7 @@ platforms:
   - gemini-cli
   - other
 metadata:
-  short-description: JSON-first ER + flowchart + BPMN 2.0 + UML class diagram + statechart DSL, plus canonical interactive ice-entity-designer editor demo guidance.
+  short-description: JSON-first ER + flowchart + BPMN 2.0 + UML + statechart + gantt DSL, plus canonical interactive ice-entity-designer editor demo guidance.
 ---
 
 # ice-entity-designer-dsl
@@ -1516,6 +1516,63 @@ Labels are composed automatically: `event [guard] / action` with missing parts o
 - Nesting states without a composite: only `kind: "composite"` accepts `parent`.
 - Forgetting the final state: a lifecycle usually has completion; `validateStatechart()`
   will not flag a missing final, but the reviewer will.
+
+## Gantt DSL
+
+Use this mode when the artifact is a **schedule / plan**: release plans, project roadmaps,
+sprint breakdowns, resource timelines — anything where the question is "what happens when".
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "kind": "gantt",
+  "nodes": [
+    { "id": "review", "title": "需求评审", "start": "2026-03-02", "days": 4, "progress": 1 },
+    { "id": "design", "title": "交互设计", "start": "2026-03-05", "days": 6, "progress": 0.8 },
+    { "id": "frontend", "title": "前端开发", "start": "2026-03-10", "days": 12, "progress": 0.35 }
+  ],
+  "edges": [
+    { "source": "review", "target": "design" },   // 完成 → 开始（finish-to-start）
+    { "source": "design", "target": "frontend" }
+  ],
+  "options": { "dayWidth": 28, "fitViewport": true }
+}
+```
+
+### Task fields
+
+| Field | Meaning |
+| --- | --- |
+| `id` | required, unique |
+| `title` / `name` | bar label (rendered as `名称（N 天）· P%`) |
+| `start` | required, `YYYY-MM-DD` |
+| `days` | duration in days, default 1 |
+| `progress` | 0..1, default 0 (drawn as a filled overlay) |
+| `row` | row index, default = declaration order |
+
+**There are no coordinates.** The horizontal axis is time (`start` × `dayWidth`), the
+vertical axis is the row. Never emit `left`/`top` for gantt tasks — they would fight the
+dates, and the editor snaps dragged bars back to whole days anyway.
+
+### Dependencies, validation, rendering
+
+- `edges` are finish-to-start dependencies: the arrow goes from the predecessor's end to
+  the successor's start. They constrain the plan but do not move bars (no auto-scheduling).
+- `validateDsl()` checks structure (ids, `start` format, `days >= 1`, `progress` in 0..1,
+  endpoints); semantics live in the designer — `result.designer.validateGantt()` reports
+  dependency cycles.
+- `ICEDSL.renderDsl('canvas', ganttDoc)` → `{ kind: 'gantt', designer: GanttDesigner }`;
+  `options.dayWidth` sets the zoom (the editor can also change it live).
+- A JSON-editor plus live preview page lives in `examples/gantt-dsl.html`.
+
+### Gantt anti-patterns
+
+- Emitting `left`/`top` (or any pixel math) for tasks: the timeline is derived from dates.
+- Overlapping a task with itself by hand-computing "day counts" across months: use
+  durations (`days`) and let the renderer place bars — `2026-02-25 + 5 days` spans the month.
+- Treating dependencies as cosmetic: a cycle is a broken schedule; the validator flags it.
+- Long plans with `dayWidth` cranked up: pick a width where the whole plan fits the page
+  (the editor's 适应视图 / `dayWidth` control does this).
 
 ## Worked example: compact e-commerce model
 

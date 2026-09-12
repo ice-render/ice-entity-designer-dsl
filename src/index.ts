@@ -6,6 +6,7 @@ export {
   validateBpmnDsl,
   validateUmlDsl,
   validateStatechartDsl,
+  validateGanttDsl,
 } from './validate';
 export { compileDsl } from './compiler/dslToScene';
 export type { CompiledScene } from './compiler/dslToScene';
@@ -19,7 +20,9 @@ export { compileUmlDsl } from './compiler/umlToScene';
 export type { CompiledUmlScene, CompiledUmlNode, CompiledUmlEdge } from './compiler/umlToScene';
 export { compileStatechartDsl } from './compiler/statechartToScene';
 export type { CompiledStatechartScene, CompiledStatechartNode, CompiledStatechartEdge } from './compiler/statechartToScene';
-export { renderDsl, renderFlowDsl, renderBpmnDsl, renderUmlDsl, renderStatechartDsl } from './runtime/renderDsl';
+export { compileGanttDsl } from './compiler/ganttToScene';
+export type { CompiledGanttScene, CompiledGanttTask, CompiledGanttDependency } from './compiler/ganttToScene';
+export { renderDsl, renderFlowDsl, renderBpmnDsl, renderUmlDsl, renderStatechartDsl, renderGanttDsl } from './runtime/renderDsl';
 export type {
   RenderDslResult,
   RenderErDslResult,
@@ -27,4 +30,5 @@ export type {
   RenderBpmnDslResult,
   RenderUmlDslResult,
   RenderStatechartDslResult,
+  RenderGanttDslResult,
 } from './runtime/renderDsl';

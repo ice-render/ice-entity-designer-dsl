@@ -2,6 +2,8 @@ import {
   validateDsl,
   compileStatechartDsl,
   isStatechartDsl,
+  compileGanttDsl,
+  isGanttDsl,
   compileDsl,
   compileFlowDsl,
   compileBpmnDsl,
@@ -501,5 +503,68 @@ describe('ice-entity-designer-dsl · 状态机文档', () => {
     const byId = new Map(scene.nodes.map((node) => [node.id, node]));
     expect(byId.get('s')).toMatchObject({ left: 160, top: 180 });
     expect(byId.get('c')).toMatchObject({ left: 100, top: 100 });
+  });
+});
+
+describe('ice-entity-designer-dsl · 甘特文档', () => {
+  const releasePlan = {
+    schemaVersion: 1,
+    kind: 'gantt' as const,
+    nodes: [
+      { id: 'review', title: '需求评审', start: '2026-03-02', days: 4, progress: 1 },
+      { id: 'design', title: '交互设计', start: '2026-03-05', days: 6, progress: 0.8 },
+      { id: 'frontend', title: '前端开发', start: '2026-03-10', days: 12, progress: 0.35 },
+      { id: 'release', title: '灰度发布', start: '2026-03-30', days: 4 },
+    ],
+    edges: [
+      { source: 'review', target: 'design' },
+      { source: 'design', target: 'frontend' },
+      { source: 'frontend', target: 'release' },
+    ],
+    options: { dayWidth: 30, fitViewport: true },
+  };
+
+  it('识别并校验最小甘特文档', () => {
+    expect(isGanttDsl(releasePlan)).toBe(true);
+    expect(validateDsl(releasePlan)).toEqual({ valid: true, errors: [] });
+  });
+
+  it('拒绝重复 id、非法日期、越界进度与悬空端点', () => {
+    const result = validateDsl({
+      kind: 'gantt',
+      nodes: [
+        { id: 'a', start: '2026-03-02' },
+        { id: 'a', start: '三月二日', days: 0, progress: 2, row: -1 },
+      ],
+      edges: [{ source: 'a', target: 'ghost' }],
+    } as any);
+    expect(result.valid).toBe(false);
+    const message = result.errors.join('\n');
+    expect(message).toContain('duplicated');
+    expect(message).toContain('nodes[1].start');
+    expect(message).toContain('nodes[1].days');
+    expect(message).toContain('nodes[1].progress');
+    expect(message).toContain('nodes[1].row');
+    expect(message).toContain('edges[0].target');
+  });
+
+  it('编译：日期/天数/进度原样传递，行号缺省按声明顺序补齐（不需要坐标）', () => {
+    const scene = compileGanttDsl(releasePlan);
+    expect(scene.kind).toBe('gantt');
+    expect(scene.nodes.map((task) => task.row)).toEqual([0, 1, 2, 3]);
+    expect(scene.nodes[0]).toMatchObject({ id: 'review', title: '需求评审', start: '2026-03-02', days: 4, progress: 1 });
+    expect(scene.nodes[3]).toMatchObject({ id: 'release', days: 4, progress: 0 });
+    expect(scene.edges[1]).toMatchObject({ sourceId: 'design', targetId: 'frontend' });
+  });
+
+  it('显式行号优先（允许任务在纵轴上重排）', () => {
+    const scene = compileGanttDsl({
+      kind: 'gantt',
+      nodes: [
+        { id: 'a', start: '2026-03-02', row: 5 },
+        { id: 'b', start: '2026-03-03' },
+      ],
+    });
+    expect(scene.nodes.map((task) => task.row)).toEqual([5, 1]);
   });
 });

@@ -1,6 +1,7 @@
-import { isBpmnDsl, isFlowDsl, isUmlDsl, isStatechartDsl } from './types';
+import { isBpmnDsl, isFlowDsl, isUmlDsl, isStatechartDsl, isGanttDsl } from './types';
 import type {
   DslBpmnDocument,
+  DslGanttDocument,
   DslStatechartDocument,
   DslUmlDocument,
   DslDocument,
@@ -40,6 +41,9 @@ const UML_RELATION_TYPES = ['inheritance', 'realization', 'association', 'aggreg
  * 或 BPMN（kind: 'bpmn'，nodes/edges + 池/泳道容器）。
  */
 export function validateDsl(dsl: DslDocument): DslValidationResult {
+  if (isGanttDsl(dsl)) {
+    return validateGanttDsl(dsl);
+  }
   if (isStatechartDsl(dsl)) {
     return validateStatechartDsl(dsl);
   }
@@ -408,6 +412,75 @@ export function validateStatechartDsl(dsl: DslStatechartDocument): DslValidation
           errors.push(`${prefix}.${key} must be a string when present`);
         }
       });
+    });
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * 甘特文档校验：结构 + 日期格式 + 数值范围 + 依赖端点。
+ *
+ * 语义检查（依赖成环等）交给 `GanttDesigner.validateGantt()`。
+ */
+export function validateGanttDsl(dsl: DslGanttDocument): DslValidationResult {
+  const errors: string[] = [];
+  if (!dsl || typeof dsl !== 'object' || Array.isArray(dsl)) {
+    return { valid: false, errors: ['DSL root must be an object'] };
+  }
+  if (dsl.schemaVersion !== undefined && dsl.schemaVersion !== DSL_SCHEMA_VERSION) {
+    errors.push(`Unsupported schemaVersion: ${dsl.schemaVersion}`);
+  }
+
+  const ids = new Set<string>();
+  if (!Array.isArray(dsl.nodes)) {
+    errors.push('nodes must be an array');
+  } else {
+    dsl.nodes.forEach((task, index) => {
+      const prefix = `nodes[${index}]`;
+      if (!task || typeof task !== 'object') {
+        errors.push(`${prefix} must be an object`);
+        return;
+      }
+      if (typeof task.id !== 'string' || !task.id.trim()) {
+        errors.push(`${prefix}.id must be a non-empty string`);
+      } else if (ids.has(task.id)) {
+        errors.push(`${prefix}.id is duplicated: ${task.id}`);
+      } else {
+        ids.add(task.id);
+      }
+      if (typeof task.start !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(task.start)) {
+        errors.push(`${prefix}.start must be a "YYYY-MM-DD" string`);
+      }
+      if (task.days !== undefined && !(Number(task.days) >= 1)) {
+        errors.push(`${prefix}.days must be a number >= 1 when present`);
+      }
+      if (task.progress !== undefined) {
+        const progress = Number(task.progress);
+        if (!(progress >= 0 && progress <= 1)) {
+          errors.push(`${prefix}.progress must be between 0 and 1 when present`);
+        }
+      }
+      if (task.row !== undefined && !(Number(task.row) >= 0)) {
+        errors.push(`${prefix}.row must be a number >= 0 when present`);
+      }
+    });
+  }
+
+  if (dsl.edges !== undefined && !Array.isArray(dsl.edges)) {
+    errors.push('edges must be an array when present');
+  } else {
+    (dsl.edges || []).forEach((edge, index) => {
+      const prefix = `edges[${index}]`;
+      if (!edge || typeof edge !== 'object') {
+        errors.push(`${prefix} must be an object`);
+        return;
+      }
+      if (typeof edge.source !== 'string' || !edge.source.trim() || !ids.has(edge.source)) {
+        errors.push(`${prefix}.source must reference an existing task id`);
+      }
+      if (typeof edge.target !== 'string' || !edge.target.trim() || !ids.has(edge.target)) {
+        errors.push(`${prefix}.target must reference an existing task id`);
+      }
     });
   }
   return { valid: errors.length === 0, errors };

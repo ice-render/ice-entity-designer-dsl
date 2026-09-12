@@ -6,10 +6,12 @@ import {
   BpmnDesigner,
   UmlDesigner,
   StatechartDesigner,
+  GanttDesigner,
 } from 'ice-entity-designer';
-import { isBpmnDsl, isFlowDsl, isUmlDsl, isStatechartDsl } from '../types';
+import { isBpmnDsl, isFlowDsl, isUmlDsl, isStatechartDsl, isGanttDsl } from '../types';
 import type {
   DslBpmnDocument,
+  DslGanttDocument,
   DslDocument,
   DslErDocument,
   DslFlowDocument,
@@ -21,6 +23,7 @@ import { compileFlowDsl } from '../compiler/flowToScene';
 import { compileBpmnDsl } from '../compiler/bpmnToScene';
 import { compileUmlDsl } from '../compiler/umlToScene';
 import { compileStatechartDsl } from '../compiler/statechartToScene';
+import { compileGanttDsl } from '../compiler/ganttToScene';
 import { validateDsl } from '../validate';
 
 export type RenderErDslResult = {
@@ -47,6 +50,12 @@ export type RenderUmlDslResult = {
   designer: any;
 };
 
+export type RenderGanttDslResult = {
+  kind: 'gantt';
+  ice: any;
+  designer: any;
+};
+
 export type RenderStatechartDslResult = {
   kind: 'statechart';
   ice: any;
@@ -58,7 +67,8 @@ export type RenderDslResult =
   | RenderFlowDslResult
   | RenderBpmnDslResult
   | RenderUmlDslResult
-  | RenderStatechartDslResult;
+  | RenderStatechartDslResult
+  | RenderGanttDslResult;
 
 function positionLinks(designer: any, scene: any, defaultRouteType: string): any[] {
   const entityBox = new Map();
@@ -137,6 +147,9 @@ export function renderDsl(canvasOrId: any, dsl: DslDocument): RenderDslResult {
   if (!validation.valid) {
     throw new Error(validation.errors.join('\n'));
   }
+  if (isGanttDsl(dsl)) {
+    return renderGanttDsl(canvasOrId, dsl);
+  }
   if (isStatechartDsl(dsl)) {
     return renderStatechartDsl(canvasOrId, dsl);
   }
@@ -150,6 +163,44 @@ export function renderDsl(canvasOrId: any, dsl: DslDocument): RenderDslResult {
     return renderFlowDsl(canvasOrId, dsl);
   }
   return renderErDsl(canvasOrId, dsl as DslErDocument);
+}
+
+/**
+ * 渲染甘特文档：任务条的位置由「起始日期 × 每日像素」算出（文档里不写坐标）。
+ *
+ * 语义校验用 `designer.validateGantt()`；矢量导出用 `designer.toSvg()`。
+ */
+export function renderGanttDsl(canvasOrId: any, dsl: DslGanttDocument): RenderGanttDslResult {
+  const scene = compileGanttDsl(dsl);
+  const options: any = scene.options || {};
+  const ice: any = new ICE().init(canvasOrId);
+  const designer: any = new GanttDesigner(ice);
+  if (options.dayWidth) {
+    designer.setDayWidth(options.dayWidth);
+  }
+
+  scene.nodes.forEach((task: any) => {
+    designer.createTask({
+      id: task.id,
+      title: task.title,
+      start: task.start,
+      days: task.days,
+      progress: task.progress,
+      row: task.row,
+    });
+  });
+  scene.edges.forEach((edge: any) => {
+    designer.createDependency(edge);
+  });
+  designer.select(null);
+
+  if (options.viewport) {
+    ice.setViewport(options.viewport.scale, options.viewport.tx, options.viewport.ty);
+  } else if (options.fitViewport !== false) {
+    designer.fitViewport(options.fitViewportPadding);
+  }
+  designer.resetHistory();
+  return { kind: 'gantt', ice, designer };
 }
 
 /**

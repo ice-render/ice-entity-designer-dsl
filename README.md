@@ -14,6 +14,9 @@ One document kind, three shapes:
   enums with free-text members (`- id: string`, `+ pay(): void`), plus the six relation
   kinds (inheritance / realization / association / aggregation / composition /
   dependency). Coordinates are optional — inheritance drives a top-down layering.
+- **Gantt** (`kind: "gantt"` with `nodes` / `edges`): a schedule — each task carries `start`
+  (`YYYY-MM-DD`), `days` and `progress`; edges are finish-to-start dependencies. **No
+  coordinates at all**: the horizontal axis is time, the vertical axis is declaration order.
 - **Statechart** (`kind: "statechart"` with `nodes` / `edges`): initial/final pseudo-states,
   states, **composite states** (containers — children follow when you drag the parent) and
   transitions labelled `event [guard] / action`. Coordinates are optional — the flow lays
@@ -27,7 +30,7 @@ The package contains:
 - browser runtime that renders DSL through `ice-entity-designer`
 - browser examples with a JSON editor (`examples/entity-editor-dsl.html`,
   `examples/flowchart-dsl.html`, `examples/bpmn-dsl.html`, `examples/uml-dsl.html`,
-  `examples/statechart-dsl.html`)
+  `examples/statechart-dsl.html`, `examples/gantt-dsl.html`)
 
 ## Install
 
@@ -134,6 +137,34 @@ const xml = IED.toBpmnXml(result.designer); // BPMN 2.0 + BPMNDI（互操作格�
 const svg = result.designer.toSvg();        // 矢量 SVG（与画布同一口径，放大不糊）
 ```
 
+### Gantt usage
+
+```js
+const plan = {
+  schemaVersion: 1,
+  kind: 'gantt',
+  nodes: [
+    { id: 'review', title: '需求评审', start: '2026-03-02', days: 4, progress: 1 },
+    { id: 'design', title: '交互设计', start: '2026-03-05', days: 6, progress: 0.8 },
+    { id: 'frontend', title: '前端开发', start: '2026-03-10', days: 12, progress: 0.35 },
+  ],
+  edges: [
+    { source: 'review', target: 'design' },      // 完成 → 开始
+    { source: 'design', target: 'frontend' },
+  ],
+  options: { dayWidth: 28, fitViewport: true },
+};
+
+const result = ICEDSL.renderDsl('canvas', plan);
+// result.kind === 'gantt'; result.designer is a GanttDesigner
+result.designer.validateGantt();   // 依赖成环 / 进度越界 / 天数非法
+result.designer.toSvg();           // 矢量导出（含日期刻度与进度）
+```
+
+Fields: `start` (`YYYY-MM-DD`, required), `days` (default 1), `progress` (0..1, default 0),
+`row` (defaults to declaration order). **Do not invent coordinates** — the timeline is derived;
+dragging a bar in the editor snaps it to whole days.
+
 ### Statechart usage
 
 ```js
@@ -206,12 +237,13 @@ intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / paral
 
 ## API
 
-- `validateDsl(dsl)` —— ER / flowchart / BPMN / UML / statechart documents (dispatches on `kind`); `validateFlowDsl(dsl)` / `validateBpmnDsl(dsl)` / `validateUmlDsl(dsl)` / `validateStatechartDsl(dsl)` for one kind only
+- `validateDsl(dsl)` —— ER / flowchart / BPMN / UML / statechart / gantt documents (dispatches on `kind`); `validateFlowDsl(dsl)` / `validateBpmnDsl(dsl)` / `validateUmlDsl(dsl)` / `validateStatechartDsl(dsl)` / `validateGanttDsl(dsl)` for one kind only
 - `compileDsl(dsl)` —— ER document → `Entity` / `Relation` props
 - `compileFlowDsl(dsl)` —— flowchart document → `FlowNode` / `FlowEdge` props (with layered auto-layout)
 - `compileBpmnDsl(dsl)` —— BPMN document → `FlowNode` / `FlowEdge` props (container auto-geometry + container-scoped auto-layout)
 - `compileUmlDsl(dsl)` —— UML document → `UmlClass` / `UmlRelation` props (inheritance-driven layering)
 - `compileStatechartDsl(dsl)` —— statechart document → `StateNode` / `StateTransition` props (flow layering + composite auto-sizing)
+- `compileGanttDsl(dsl)` —— gantt document → `GanttTask` / `GanttDependency` props (no coordinates; rows filled in)
 - `layeredLayout(items, edges, options)` —— the shared layered layout (`direction: "vertical" | "horizontal"`)
 - `renderDsl(canvasOrId, dsl)` —— renders any kind, returns `{ kind, ice, designer }`
 - Export: `result.designer.toSvg(options)` (flowchart / BPMN) or `IED.exportSvg(result.ice, options)`; `options` = `{ area: 'content' | 'viewport', padding, scale, background, includeTools }`. The SVG is regenerated from the component tree + path commands, so it matches the canvas (geometry, styles, opacity, shadows, link labels) and can be rasterised to PNG/PDF by any external tool.
@@ -220,8 +252,8 @@ intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / paral
 ## Example
 
 Open `examples/entity-editor-dsl.html` (ER), `examples/flowchart-dsl.html`
-(flowchart), `examples/bpmn-dsl.html` (BPMN), `examples/uml-dsl.html` (UML) or
-`examples/statechart-dsl.html` (statechart) after building.
+(flowchart), `examples/bpmn-dsl.html` (BPMN), `examples/uml-dsl.html` (UML),
+`examples/statechart-dsl.html` (statechart) or `examples/gantt-dsl.html` (gantt) after building.
 
 ## Agent discovery
 

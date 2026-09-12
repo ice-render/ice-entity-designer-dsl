@@ -234,7 +234,8 @@ export type DslDocument =
   | DslFlowDocument
   | DslBpmnDocument
   | DslUmlDocument
-  | DslStatechartDocument;
+  | DslStatechartDocument
+  | DslGanttDocument;
 
 export type DslValidationResult = {
   valid: boolean;
@@ -381,4 +382,53 @@ export type DslStatechartDocument = {
 /** 运行时判别：带 kind: 'statechart' 的按状态机文档处理 */
 export function isStatechartDsl(dsl: any): dsl is DslStatechartDocument {
   return !!dsl && typeof dsl === 'object' && dsl.kind === 'statechart';
+}
+
+/* ------------------------------------------------------------------------- *
+ * 甘特图文档（kind: 'gantt'）
+ *
+ * 节点 = 任务（起始日期 + 持续天数 + 进度），连线 = 依赖（完成 → 开始）。
+ * **不需要坐标**：横轴是时间（由 start/days 算），纵轴是行（按声明顺序）。
+ * ------------------------------------------------------------------------- */
+
+export type DslGanttTask = {
+  id: string;
+  /** 任务名（title / name 二者取一） */
+  title?: string;
+  name?: string;
+  /** 起始日期 `YYYY-MM-DD` */
+  start: string;
+  /** 持续天数，默认 1 */
+  days?: number;
+  /** 完成度 0..1，默认 0 */
+  progress?: number;
+  /** 行号（0 起）；缺省按声明顺序 */
+  row?: number;
+};
+
+export type DslGanttDependency = {
+  id?: string;
+  source: string;
+  target: string;
+};
+
+export type DslGanttDocumentOptions = {
+  fitViewport?: boolean;
+  fitViewportPadding?: number;
+  viewport?: { scale: number; tx: number; ty: number };
+  /** 每天多少像素，默认 28 */
+  dayWidth?: number;
+};
+
+export type DslGanttDocument = {
+  schemaVersion?: number;
+  kind: 'gantt';
+  nodes: DslGanttTask[];
+  edges?: DslGanttDependency[];
+  options?: DslGanttDocumentOptions;
+};
+
+/** 运行时判别：带 kind: 'gantt' 的按甘特文档处理 */
+export function isGanttDsl(dsl: any): dsl is DslGanttDocument {
+  return !!dsl && typeof dsl === 'object' && dsl.kind === 'gantt';
 }
