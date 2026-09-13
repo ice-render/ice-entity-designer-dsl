@@ -31,3 +31,29 @@ describe('示例页 · 导出当前文档（toDsl 往返的可视化入口）', 
     });
   });
 });
+
+/**
+ * 示例页的脚本加载顺序（回归：曾整套漏掉 ice-render）。
+ *
+ * `ice-entity-designer` 与 `ice-entity-designer-dsl` 的 UMD 都把引擎 **external** 化
+ * （designer 的 rollup `globals: { 'ice-render': 'ICE' }`），页面必须先加载 ice-render 的 UMD
+ * 提供 `window.ICE`。此前七个示例页只引了 designer + dsl 两个包，打开就是
+ * `Cannot read properties of undefined (reading 'ICEGroup')`、`ICEDSL.renderDsl is not a function`
+ * —— 整页白屏，而 jest 只跑库代码、没有任何测试覆盖示例页，所以一直没人发现。
+ */
+describe('示例页 · 引擎 UMD 必须在 designer / dsl 之前加载', () => {
+  EXAMPLES.forEach((name) => {
+    it(`${name}.html 先引 ice-render，再引 ice-entity-designer，最后引本包`, () => {
+      const file = path.join(__dirname, '..', 'examples', `${name}.html`);
+      const html = fs.readFileSync(file, 'utf-8');
+      const order = [...html.matchAll(/<script src="([^"]+)"/g)].map((match) => match[1]);
+      const at = (needle: string) => order.findIndex((src) => src.includes(needle));
+
+      expect(at('node_modules/ice-render/dist/index.umd.js')).toBeGreaterThanOrEqual(0);
+      expect(at('node_modules/ice-entity-designer/dist/index.umd.js')).toBeGreaterThan(
+        at('node_modules/ice-render/dist/index.umd.js')
+      );
+      expect(at('../dist/index.umd.js')).toBeGreaterThan(at('node_modules/ice-entity-designer/dist/index.umd.js'));
+    });
+  });
+});
