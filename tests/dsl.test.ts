@@ -111,7 +111,14 @@ describe('ice-entity-designer-dsl · 流程图文档', () => {
       edges: [{ source: 'a', target: 'b', label: '否' }],
     });
     expect(scene.kind).toBe('flowchart');
-    expect(scene.nodes[0]).toMatchObject({ id: 'a', typeId: 'FlowNode', kind: 'decision', title: '取名', width: 200, height: 120 });
+    expect(scene.nodes[0]).toMatchObject({
+      id: 'a',
+      typeId: 'ice-entity-designer:FlowNode',
+      kind: 'decision',
+      title: '取名',
+      width: 200,
+      height: 120,
+    });
     expect(scene.nodes[0].fillColor).toBeTruthy();
     expect(scene.nodes[1]).toMatchObject({ kind: 'io', title: 'b', width: 220, height: 80 });
     expect(scene.edges[0]).toMatchObject({ sourceId: 'a', targetId: 'b', sourcePort: 'B', targetPort: 'T', label: '否', linkShape: 'visio' });

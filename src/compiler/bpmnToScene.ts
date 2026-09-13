@@ -1,10 +1,10 @@
-import { FLOW_NODE_KINDS } from 'ice-entity-designer';
+import { FLOW_NODE_KINDS, FlowNode } from 'ice-entity-designer';
 import type { DslBpmnDocument, DslBpmnEdge, DslBpmnNode, DslBpmnNodeKind } from '../types';
 import { layeredLayout } from './layout';
 
 export type CompiledBpmnNode = {
   id: string;
-  typeId: 'FlowNode';
+  typeId: string;
   /** ice-entity-designer 的 FlowNode kind（bpmn*） */
   kind: string;
   title: string;
@@ -81,7 +81,7 @@ function toWorkingNode(item: DslBpmnNode): WorkingNode {
   const preset = presetOf(KIND_BY_DSL_KIND[dslKind] || 'bpmnTask');
   const node: WorkingNode = {
     id: item.id,
-    typeId: 'FlowNode',
+    typeId: FlowNode.typeId,
     kind: KIND_BY_DSL_KIND[dslKind] || 'bpmnTask',
     title: item.title || item.name || item.id,
     left: typeof item.left === 'number' ? item.left : 0,
@@ -371,7 +371,7 @@ export function compileBpmnDsl(dsl: DslBpmnDocument): CompiledBpmnScene {
   const outputNodes: CompiledBpmnNode[] = pools.concat(lanes).concat(flows).map((node) => {
     const output: CompiledBpmnNode = {
       id: node.id,
-      typeId: 'FlowNode',
+      typeId: FlowNode.typeId,
       kind: node.kind,
       title: node.title,
       left: node.left,

@@ -1,4 +1,4 @@
-import { FLOW_NODE_KINDS } from 'ice-entity-designer';
+import { FLOW_NODE_KINDS, FlowNode } from 'ice-entity-designer';
 import type { DslFlowDocument, DslFlowEdge, DslFlowNode, DslFlowNodeKind } from '../types';
 import { layeredLayout } from './layout';
 
@@ -74,7 +74,7 @@ export function compileFlowDsl(dsl: DslFlowDocument): CompiledFlowScene {
     const preset = PRESETS[kind];
     return {
       id: item.id,
-      typeId: 'FlowNode',
+      typeId: FlowNode.typeId,
       kind,
       title: nodeTitle(item),
       left: typeof item.left === 'number' ? item.left : Number.NaN,
