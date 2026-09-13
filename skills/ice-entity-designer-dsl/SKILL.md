@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate and round-trip JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, gantt schedules, power one-line diagrams) for ice-entity-designer — render them into editable instances and read user edits back with toDsl(). For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.4.2"
+version: "1.4.3"
 category: data
 platforms:
   - claude-code
@@ -1160,9 +1160,9 @@ without notice). Same rule as ice-render's `ICE_ERROR_CODES` for engine errors �
 
 ### Runtime requirements
 
-- Node: install `ice-entity-designer-dsl@>=0.0.17`.
-  `ice-entity-designer@^0.1.0` and `ice-render@^1.4.11` are peer dependencies
-  (npm 7+ installs peers automatically).
+- Node: install `ice-entity-designer-dsl@>=0.0.19`.
+  `ice-entity-designer@^0.2.0` and `ice-render@^2.0.0` are peer dependencies
+  (npm 7+ installs peers automatically)；家族当前引擎为 `2.2.0`，建议直接装最新。
 - Browser: load `ice-render`, then `ice-entity-designer`, then
   `ice-entity-designer-dsl`.
 
