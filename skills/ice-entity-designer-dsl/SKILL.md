@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate and round-trip JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, gantt schedules, power one-line diagrams) for ice-entity-designer — render them into editable instances and read user edits back with toDsl(). For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.4.1"
+version: "1.4.2"
 category: data
 platforms:
   - claude-code
@@ -63,8 +63,11 @@ When the requested artifact is an interactive ER editor, use
 For a no-build HTML demo:
 
 - create `index.html`
-- copy `ice-entity-designer/dist/index.umd.js` next to `index.html`
-- load `<script src="./ice-entity-designer.umd.js"></script>`
+- copy `ice-render/dist/index.umd.js` and `ice-entity-designer/dist/index.umd.js`
+  next to `index.html`
+- load them in order:
+  `<script src="./ice-render.umd.js"></script>` then
+  `<script src="./ice-entity-designer.umd.js"></script>`
 - use the global `IED` namespace:
 
 ```js
@@ -1135,9 +1138,11 @@ Call `validateDsl()` before rendering. The validator checks:
 
 ### Runtime requirements
 
-- Node: installing `ice-entity-designer-dsl@>=0.0.3` automatically installs
-  `ice-entity-designer`.
-- Browser: load `ice-entity-designer` before `ice-entity-designer-dsl`.
+- Node: install `ice-entity-designer-dsl@>=0.0.17`.
+  `ice-entity-designer@^0.1.0` and `ice-render@^1.4.11` are peer dependencies
+  (npm 7+ installs peers automatically).
+- Browser: load `ice-render`, then `ice-entity-designer`, then
+  `ice-entity-designer-dsl`.
 
 Browser:
 
