@@ -344,8 +344,16 @@ function componentType(component) {
   return component && component.constructor && component.constructor.typeId;
 }
 
-// 'Entity' | 'Relation' | null
+// 'ice-entity-designer:Entity' | 'ice-entity-designer:Relation' | null
 ```
+
+Type ids are namespaced (`namespace:Type`) since 2026-09-13, so the values are
+`ice-entity-designer:Entity`, `ice-entity-designer:Relation`,
+`ice-entity-designer:FlowNode`, … Prefer comparing against the constructor's own
+static id (`constructor.typeId === FlowNode.typeId`) over writing the string
+literally. There is no backwards compatibility for the old bare names
+(`Entity`, `FlowNode`): data carrying them is treated as an unregistered type
+and skipped on load.
 
 #### Zoom and pan
 
@@ -412,7 +420,7 @@ let linkSource = null;
 function findRootEntity(component) {
   let root = component;
   while (root && root.parentNode) root = root.parentNode;
-  return root && root.constructor && root.constructor.typeId === 'Entity'
+  return root && root.constructor && root.constructor.typeId === 'ice-entity-designer:Entity'
     ? root
     : null;
 }
@@ -708,7 +716,8 @@ Do **not**:
 - make entities non-draggable except while link mode is active
 - omit the entity/relation property panels
 - omit TypeORM Schema and validation output
-- use `constructor.name` for type checks; use `constructor.typeId`
+- use `constructor.name` for type checks; use `constructor.typeId` (namespaced
+  `namespace:Type` values such as `ice-entity-designer:Entity`)
 - load both `ice-entity-designer-dsl` and `ice-entity-designer` bundles unless
   the page also has a separate static-DSL feature
 
