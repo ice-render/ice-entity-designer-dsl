@@ -80,7 +80,7 @@ describe('ice-entity-designer-dsl · 流程图文档', () => {
 
   it('识别并校验最小流程图文档', () => {
     expect(isFlowDsl(minimalFlow)).toBe(true);
-    expect(validateDsl(minimalFlow)).toEqual({ valid: true, errors: [] });
+    expect(validateDsl(minimalFlow)).toEqual({ valid: true, errors: [], diagnostics: [] });
   });
 
   it('拒绝重复节点 id、悬空端点与非法类型/端口', () => {
@@ -195,7 +195,7 @@ describe('ice-entity-designer-dsl · BPMN 文档', () => {
   it('识别并校验最小 BPMN 文档', () => {
     expect(isBpmnDsl(minimalBpmn)).toBe(true);
     expect(isFlowDsl(minimalBpmn as any)).toBe(false);
-    expect(validateDsl(minimalBpmn)).toEqual({ valid: true, errors: [] });
+    expect(validateDsl(minimalBpmn)).toEqual({ valid: true, errors: [], diagnostics: [] });
   });
 
   it('拒绝重复 id、悬空端点、非法词汇与不合法的 parent', () => {
@@ -359,7 +359,7 @@ describe('ice-entity-designer-dsl · UML 类图文档', () => {
   it('识别并校验最小 UML 文档', () => {
     expect(isUmlDsl(minimalUml)).toBe(true);
     expect(isFlowDsl(minimalUml as any)).toBe(false);
-    expect(validateDsl(minimalUml)).toEqual({ valid: true, errors: [] });
+    expect(validateDsl(minimalUml)).toEqual({ valid: true, errors: [], diagnostics: [] });
   });
 
   it('拒绝重复 id、非法 kind、非字符串成员、悬空端点与非法关系类型', () => {
@@ -452,7 +452,7 @@ describe('ice-entity-designer-dsl · 状态机文档', () => {
 
   it('识别并校验最小状态机文档', () => {
     expect(isStatechartDsl(orderStatechart)).toBe(true);
-    expect(validateDsl(orderStatechart)).toEqual({ valid: true, errors: [] });
+    expect(validateDsl(orderStatechart)).toEqual({ valid: true, errors: [], diagnostics: [] });
   });
 
   it('拒绝重复 id、非法 kind、非法 parent（只能挂复合状态）与悬空端点', () => {
@@ -535,7 +535,7 @@ describe('ice-entity-designer-dsl · 甘特文档', () => {
 
   it('识别并校验最小甘特文档', () => {
     expect(isGanttDsl(releasePlan)).toBe(true);
-    expect(validateDsl(releasePlan)).toEqual({ valid: true, errors: [] });
+    expect(validateDsl(releasePlan)).toEqual({ valid: true, errors: [], diagnostics: [] });
   });
 
   it('拒绝重复 id、非法日期、越界进度与悬空端点', () => {
@@ -622,7 +622,7 @@ describe('ice-entity-designer-dsl · 电力一次系统图文档', () => {
 
   it('识别并校验最小电力文档', () => {
     expect(isPowerDsl(substation)).toBe(true);
-    expect(validateDsl(substation)).toEqual({ valid: true, errors: [] });
+    expect(validateDsl(substation)).toEqual({ valid: true, errors: [], diagnostics: [] });
   });
 
   it('拒绝非法 kind、重复 id、悬空端点与「挂在非母线上」', () => {

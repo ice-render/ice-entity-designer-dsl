@@ -1,4 +1,13 @@
-import { isBpmnDsl, isFlowDsl, isUmlDsl, isStatechartDsl, isGanttDsl, isPowerDsl, POWER_DSL_KINDS } from './types';
+import {
+  isBpmnDsl,
+  isFlowDsl,
+  isUmlDsl,
+  isStatechartDsl,
+  isGanttDsl,
+  isPowerDsl,
+  POWER_DSL_KINDS,
+  IED_DSL_CODES,
+} from './types';
 import type {
   DslPowerDocument,
   DslBpmnDocument,
@@ -10,6 +19,7 @@ import type {
   DslFlowNodeKind,
   DslPort,
   DslValidationResult,
+  IedDslDiagnostic,
 } from './types';
 
 export const DSL_SCHEMA_VERSION = 1;
@@ -72,39 +82,49 @@ export function validateDsl(dsl: DslDocument): DslValidationResult {
  */
 export function validateBpmnDsl(dsl: DslBpmnDocument): DslValidationResult {
   const errors: string[] = [];
+  /**
+   * 记一条错误：`errors` 保持原来的英文句子（兼容既有调用方）；
+   * `diagnostics` 带稳定码与位置（Agent / 工具据此分支，不要去匹配 message）。
+   */
+  const diagnostics: IedDslDiagnostic[] = [];
+  const fail = (code: string, message: string, path?: string) => {
+    errors.push(message);
+    diagnostics.push({ severity: 'error', code, message, path });
+  };
   if (!dsl || typeof dsl !== 'object' || Array.isArray(dsl)) {
-    return { valid: false, errors: ['DSL root must be an object'] };
+    fail(IED_DSL_CODES.ROOT_NOT_OBJECT, 'DSL root must be an object');
+    return { valid: false, errors, diagnostics };
   }
   if (dsl.schemaVersion !== undefined && dsl.schemaVersion !== DSL_SCHEMA_VERSION) {
-    errors.push(`Unsupported schemaVersion: ${dsl.schemaVersion}`);
+    fail(IED_DSL_CODES.SCHEMA_VERSION_UNSUPPORTED, `Unsupported schemaVersion: ${dsl.schemaVersion}`);
   }
 
   const ids = new Set<string>();
   const kinds = new Map<string, string>();
   if (!Array.isArray(dsl.nodes)) {
-    errors.push('nodes must be an array');
+    fail(IED_DSL_CODES.NODES_NOT_ARRAY, 'nodes must be an array');
   } else {
     dsl.nodes.forEach((node, index) => {
       const prefix = `nodes[${index}]`;
       if (!node || typeof node !== 'object') {
-        errors.push(`${prefix} must be an object`);
+        fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
         return;
       }
       if (typeof node.id !== 'string' || !node.id.trim()) {
-        errors.push(`${prefix}.id must be a non-empty string`);
+        fail(IED_DSL_CODES.ID_INVALID, `${prefix}.id must be a non-empty string`, prefix);
       } else if (ids.has(node.id)) {
-        errors.push(`${prefix}.id is duplicated: ${node.id}`);
+        fail(IED_DSL_CODES.ID_DUPLICATED, `${prefix}.id is duplicated: ${node.id}`, prefix);
       } else {
         ids.add(node.id);
         kinds.set(node.id, node.kind || 'task');
       }
       if (node.kind !== undefined && BPMN_NODE_KINDS.indexOf(node.kind) === -1) {
-        errors.push(`${prefix}.kind must be one of ${BPMN_NODE_KINDS.join('/')}`);
+        fail(IED_DSL_CODES.KIND_INVALID, `${prefix}.kind must be one of ${BPMN_NODE_KINDS.join('/')}`, prefix);
       }
       ['left', 'top', 'width', 'height'].forEach((key) => {
         const value = (node as any)[key];
         if (value !== undefined && typeof value !== 'number') {
-          errors.push(`${prefix}.${key} must be a number when present`);
+          fail(IED_DSL_CODES.FIELD_TYPE, `${prefix}.${key} must be a number when present`, prefix);
         }
       });
       const enums: Array<[string, string[]]> = [
@@ -116,7 +136,7 @@ export function validateBpmnDsl(dsl: DslBpmnDocument): DslValidationResult {
       enums.forEach(([key, allowed]) => {
         const value = (node as any)[key];
         if (value !== undefined && allowed.indexOf(value) === -1) {
-          errors.push(`${prefix}.${key} must be one of ${allowed.join('/')}`);
+          fail(IED_DSL_CODES.FIELD_ENUM, `${prefix}.${key} must be one of ${allowed.join('/')}`, prefix);
         }
       });
     });
@@ -128,130 +148,140 @@ export function validateBpmnDsl(dsl: DslBpmnDocument): DslValidationResult {
       }
       const prefix = `nodes[${index}]`;
       if (typeof node.parent !== 'string' || !node.parent.trim()) {
-        errors.push(`${prefix}.parent must be a non-empty string when present`);
+        fail(IED_DSL_CODES.PARENT_INVALID, `${prefix}.parent must be a non-empty string when present`, prefix);
         return;
       }
       if (!ids.has(node.parent)) {
-        errors.push(`${prefix}.parent must reference an existing node id`);
+        fail(IED_DSL_CODES.PARENT_UNKNOWN, `${prefix}.parent must reference an existing node id`, prefix);
         return;
       }
       if (node.parent === node.id) {
-        errors.push(`${prefix}.parent must not reference itself`);
+        fail(IED_DSL_CODES.PARENT_SELF, `${prefix}.parent must not reference itself`, prefix);
         return;
       }
       const parentKind = kinds.get(node.parent);
       if (node.kind === 'pool') {
-        errors.push(`${prefix}.parent is not allowed on a pool (池是最外层容器)`);
+        fail(IED_DSL_CODES.PARENT_NOT_ALLOWED, `${prefix}.parent is not allowed on a pool (池是最外层容器)`, prefix);
       } else if (node.kind === 'lane' && parentKind !== 'pool') {
-        errors.push(`${prefix}.parent must reference a pool`);
+        fail(IED_DSL_CODES.PARENT_KIND, `${prefix}.parent must reference a pool`, prefix);
       } else if (parentKind !== 'pool' && parentKind !== 'lane') {
-        errors.push(`${prefix}.parent must reference a pool or a lane`);
+        fail(IED_DSL_CODES.PARENT_KIND, `${prefix}.parent must reference a pool or a lane`, prefix);
       }
     });
   }
 
   if (dsl.edges !== undefined && !Array.isArray(dsl.edges)) {
-    errors.push('edges must be an array when present');
+    fail(IED_DSL_CODES.EDGES_NOT_ARRAY, 'edges must be an array when present');
   } else {
     (dsl.edges || []).forEach((edge, index) => {
       const prefix = `edges[${index}]`;
       if (!edge || typeof edge !== 'object') {
-        errors.push(`${prefix} must be an object`);
+        fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
         return;
       }
       if (typeof edge.source !== 'string' || !edge.source.trim() || !ids.has(edge.source)) {
-        errors.push(`${prefix}.source must reference an existing node id`);
+        fail(IED_DSL_CODES.EDGE_ENDPOINT_UNKNOWN, `${prefix}.source must reference an existing node id`, prefix);
       }
       if (typeof edge.target !== 'string' || !edge.target.trim() || !ids.has(edge.target)) {
-        errors.push(`${prefix}.target must reference an existing node id`);
+        fail(IED_DSL_CODES.EDGE_ENDPOINT_UNKNOWN, `${prefix}.target must reference an existing node id`, prefix);
       }
       const flowType = edge.type !== undefined ? edge.type : edge.flowType;
       if (flowType !== undefined && BPMN_FLOW_TYPES.indexOf(flowType) === -1) {
-        errors.push(`${prefix}.type must be one of ${BPMN_FLOW_TYPES.join('/')}`);
+        fail(IED_DSL_CODES.FIELD_ENUM, `${prefix}.type must be one of ${BPMN_FLOW_TYPES.join('/')}`, prefix);
       }
       if (edge.label !== undefined && typeof edge.label !== 'string') {
-        errors.push(`${prefix}.label must be a string when present`);
+        fail(IED_DSL_CODES.FIELD_TYPE, `${prefix}.label must be a string when present`, prefix);
       }
       if (edge.condition !== undefined && typeof edge.condition !== 'string') {
-        errors.push(`${prefix}.condition must be a string when present`);
+        fail(IED_DSL_CODES.FIELD_TYPE, `${prefix}.condition must be a string when present`, prefix);
       }
       if (edge.linkShape !== undefined && edge.linkShape !== 'visio' && edge.linkShape !== 'bezier') {
-        errors.push(`${prefix}.linkShape must be "visio" or "bezier" when present`);
+        fail(IED_DSL_CODES.FIELD_ENUM, `${prefix}.linkShape must be "visio" or "bezier" when present`, prefix);
       }
     });
   }
-  return { valid: errors.length === 0, errors };
+  return { valid: errors.length === 0, errors, diagnostics };
 }
 
 /** 流程图文档校验：结构 + 端点必须指向已存在的节点（与 ER 的关系校验同一口径） */
 export function validateFlowDsl(dsl: DslFlowDocument): DslValidationResult {
   const errors: string[] = [];
+  /**
+   * 记一条错误：`errors` 保持原来的英文句子（兼容既有调用方）；
+   * `diagnostics` 带稳定码与位置（Agent / 工具据此分支，不要去匹配 message）。
+   */
+  const diagnostics: IedDslDiagnostic[] = [];
+  const fail = (code: string, message: string, path?: string) => {
+    errors.push(message);
+    diagnostics.push({ severity: 'error', code, message, path });
+  };
   if (!dsl || typeof dsl !== 'object' || Array.isArray(dsl)) {
-    return { valid: false, errors: ['DSL root must be an object'] };
+    fail(IED_DSL_CODES.ROOT_NOT_OBJECT, 'DSL root must be an object');
+    return { valid: false, errors, diagnostics };
   }
   if (dsl.schemaVersion !== undefined && dsl.schemaVersion !== DSL_SCHEMA_VERSION) {
-    errors.push(`Unsupported schemaVersion: ${dsl.schemaVersion}`);
+    fail(IED_DSL_CODES.SCHEMA_VERSION_UNSUPPORTED, `Unsupported schemaVersion: ${dsl.schemaVersion}`);
   }
 
   const ids = new Set<string>();
   if (!Array.isArray(dsl.nodes)) {
-    errors.push('nodes must be an array');
+    fail(IED_DSL_CODES.NODES_NOT_ARRAY, 'nodes must be an array');
   } else {
     dsl.nodes.forEach((node, index) => {
       const prefix = `nodes[${index}]`;
       if (!node || typeof node !== 'object') {
-        errors.push(`${prefix} must be an object`);
+        fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
         return;
       }
       if (typeof node.id !== 'string' || !node.id.trim()) {
-        errors.push(`${prefix}.id must be a non-empty string`);
+        fail(IED_DSL_CODES.ID_INVALID, `${prefix}.id must be a non-empty string`, prefix);
       } else if (ids.has(node.id)) {
-        errors.push(`${prefix}.id is duplicated: ${node.id}`);
+        fail(IED_DSL_CODES.ID_DUPLICATED, `${prefix}.id is duplicated: ${node.id}`, prefix);
       } else {
         ids.add(node.id);
       }
       if (node.kind !== undefined && FLOW_NODE_KINDS.indexOf(node.kind) === -1) {
-        errors.push(`${prefix}.kind must be one of ${FLOW_NODE_KINDS.join('/')}`);
+        fail(IED_DSL_CODES.KIND_INVALID, `${prefix}.kind must be one of ${FLOW_NODE_KINDS.join('/')}`, prefix);
       }
       ['left', 'top', 'width', 'height'].forEach((key) => {
         const value = (node as any)[key];
         if (value !== undefined && typeof value !== 'number') {
-          errors.push(`${prefix}.${key} must be a number when present`);
+          fail(IED_DSL_CODES.FIELD_TYPE, `${prefix}.${key} must be a number when present`, prefix);
         }
       });
     });
   }
 
   if (dsl.edges !== undefined && !Array.isArray(dsl.edges)) {
-    errors.push('edges must be an array when present');
+    fail(IED_DSL_CODES.EDGES_NOT_ARRAY, 'edges must be an array when present');
   } else {
     (dsl.edges || []).forEach((edge, index) => {
       const prefix = `edges[${index}]`;
       if (!edge || typeof edge !== 'object') {
-        errors.push(`${prefix} must be an object`);
+        fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
         return;
       }
       if (typeof edge.source !== 'string' || !edge.source.trim() || !ids.has(edge.source)) {
-        errors.push(`${prefix}.source must reference an existing node id`);
+        fail(IED_DSL_CODES.EDGE_ENDPOINT_UNKNOWN, `${prefix}.source must reference an existing node id`, prefix);
       }
       if (typeof edge.target !== 'string' || !edge.target.trim() || !ids.has(edge.target)) {
-        errors.push(`${prefix}.target must reference an existing node id`);
+        fail(IED_DSL_CODES.EDGE_ENDPOINT_UNKNOWN, `${prefix}.target must reference an existing node id`, prefix);
       }
       if (edge.label !== undefined && typeof edge.label !== 'string') {
-        errors.push(`${prefix}.label must be a string when present`);
+        fail(IED_DSL_CODES.FIELD_TYPE, `${prefix}.label must be a string when present`, prefix);
       }
       if (edge.sourcePort !== undefined && FLOW_PORTS.indexOf(edge.sourcePort) === -1) {
-        errors.push(`${prefix}.sourcePort must be one of ${FLOW_PORTS.join('/')}`);
+        fail(IED_DSL_CODES.FIELD_ENUM, `${prefix}.sourcePort must be one of ${FLOW_PORTS.join('/')}`, prefix);
       }
       if (edge.targetPort !== undefined && FLOW_PORTS.indexOf(edge.targetPort) === -1) {
-        errors.push(`${prefix}.targetPort must be one of ${FLOW_PORTS.join('/')}`);
+        fail(IED_DSL_CODES.FIELD_ENUM, `${prefix}.targetPort must be one of ${FLOW_PORTS.join('/')}`, prefix);
       }
       if (edge.linkShape !== undefined && edge.linkShape !== 'visio' && edge.linkShape !== 'bezier') {
-        errors.push(`${prefix}.linkShape must be "visio" or "bezier" when present`);
+        fail(IED_DSL_CODES.FIELD_ENUM, `${prefix}.linkShape must be "visio" or "bezier" when present`, prefix);
       }
     });
   }
-  return { valid: errors.length === 0, errors };
+  return { valid: errors.length === 0, errors, diagnostics };
 }
 
 /**
@@ -262,32 +292,42 @@ export function validateFlowDsl(dsl: DslFlowDocument): DslValidationResult {
  */
 export function validateUmlDsl(dsl: DslUmlDocument): DslValidationResult {
   const errors: string[] = [];
+  /**
+   * 记一条错误：`errors` 保持原来的英文句子（兼容既有调用方）；
+   * `diagnostics` 带稳定码与位置（Agent / 工具据此分支，不要去匹配 message）。
+   */
+  const diagnostics: IedDslDiagnostic[] = [];
+  const fail = (code: string, message: string, path?: string) => {
+    errors.push(message);
+    diagnostics.push({ severity: 'error', code, message, path });
+  };
   if (!dsl || typeof dsl !== 'object' || Array.isArray(dsl)) {
-    return { valid: false, errors: ['DSL root must be an object'] };
+    fail(IED_DSL_CODES.ROOT_NOT_OBJECT, 'DSL root must be an object');
+    return { valid: false, errors, diagnostics };
   }
   if (dsl.schemaVersion !== undefined && dsl.schemaVersion !== DSL_SCHEMA_VERSION) {
-    errors.push(`Unsupported schemaVersion: ${dsl.schemaVersion}`);
+    fail(IED_DSL_CODES.SCHEMA_VERSION_UNSUPPORTED, `Unsupported schemaVersion: ${dsl.schemaVersion}`);
   }
 
   const ids = new Set<string>();
   if (!Array.isArray(dsl.nodes)) {
-    errors.push('nodes must be an array');
+    fail(IED_DSL_CODES.NODES_NOT_ARRAY, 'nodes must be an array');
   } else {
     dsl.nodes.forEach((node, index) => {
       const prefix = `nodes[${index}]`;
       if (!node || typeof node !== 'object') {
-        errors.push(`${prefix} must be an object`);
+        fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
         return;
       }
       if (typeof node.id !== 'string' || !node.id.trim()) {
-        errors.push(`${prefix}.id must be a non-empty string`);
+        fail(IED_DSL_CODES.ID_INVALID, `${prefix}.id must be a non-empty string`, prefix);
       } else if (ids.has(node.id)) {
-        errors.push(`${prefix}.id is duplicated: ${node.id}`);
+        fail(IED_DSL_CODES.ID_DUPLICATED, `${prefix}.id is duplicated: ${node.id}`, prefix);
       } else {
         ids.add(node.id);
       }
       if (node.kind !== undefined && UML_NODE_KINDS.indexOf(node.kind) === -1) {
-        errors.push(`${prefix}.kind must be one of ${UML_NODE_KINDS.join('/')}`);
+        fail(IED_DSL_CODES.KIND_INVALID, `${prefix}.kind must be one of ${UML_NODE_KINDS.join('/')}`, prefix);
       }
       ['attributes', 'methods'].forEach((key) => {
         const value = (node as any)[key];
@@ -295,43 +335,43 @@ export function validateUmlDsl(dsl: DslUmlDocument): DslValidationResult {
           return;
         }
         if (!Array.isArray(value) || value.some((item: any) => typeof item !== 'string')) {
-          errors.push(`${prefix}.${key} must be an array of strings when present`);
+          fail(IED_DSL_CODES.FIELD_TYPE, `${prefix}.${key} must be an array of strings when present`, prefix);
         }
       });
       ['left', 'top', 'width', 'height'].forEach((key) => {
         const value = (node as any)[key];
         if (value !== undefined && typeof value !== 'number') {
-          errors.push(`${prefix}.${key} must be a number when present`);
+          fail(IED_DSL_CODES.FIELD_TYPE, `${prefix}.${key} must be a number when present`, prefix);
         }
       });
     });
   }
 
   if (dsl.edges !== undefined && !Array.isArray(dsl.edges)) {
-    errors.push('edges must be an array when present');
+    fail(IED_DSL_CODES.EDGES_NOT_ARRAY, 'edges must be an array when present');
   } else {
     (dsl.edges || []).forEach((edge, index) => {
       const prefix = `edges[${index}]`;
       if (!edge || typeof edge !== 'object') {
-        errors.push(`${prefix} must be an object`);
+        fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
         return;
       }
       if (typeof edge.source !== 'string' || !edge.source.trim() || !ids.has(edge.source)) {
-        errors.push(`${prefix}.source must reference an existing node id`);
+        fail(IED_DSL_CODES.EDGE_ENDPOINT_UNKNOWN, `${prefix}.source must reference an existing node id`, prefix);
       }
       if (typeof edge.target !== 'string' || !edge.target.trim() || !ids.has(edge.target)) {
-        errors.push(`${prefix}.target must reference an existing node id`);
+        fail(IED_DSL_CODES.EDGE_ENDPOINT_UNKNOWN, `${prefix}.target must reference an existing node id`, prefix);
       }
       const relationType = edge.type !== undefined ? edge.type : edge.relation;
       if (relationType !== undefined && UML_RELATION_TYPES.indexOf(relationType) === -1) {
-        errors.push(`${prefix}.type must be one of ${UML_RELATION_TYPES.join('/')}`);
+        fail(IED_DSL_CODES.FIELD_ENUM, `${prefix}.type must be one of ${UML_RELATION_TYPES.join('/')}`, prefix);
       }
       if (edge.label !== undefined && typeof edge.label !== 'string') {
-        errors.push(`${prefix}.label must be a string when present`);
+        fail(IED_DSL_CODES.FIELD_TYPE, `${prefix}.label must be a string when present`, prefix);
       }
     });
   }
-  return { valid: errors.length === 0, errors };
+  return { valid: errors.length === 0, errors, diagnostics };
 }
 
 /**
@@ -340,39 +380,49 @@ export function validateUmlDsl(dsl: DslUmlDocument): DslValidationResult {
  */
 export function validateStatechartDsl(dsl: DslStatechartDocument): DslValidationResult {
   const errors: string[] = [];
+  /**
+   * 记一条错误：`errors` 保持原来的英文句子（兼容既有调用方）；
+   * `diagnostics` 带稳定码与位置（Agent / 工具据此分支，不要去匹配 message）。
+   */
+  const diagnostics: IedDslDiagnostic[] = [];
+  const fail = (code: string, message: string, path?: string) => {
+    errors.push(message);
+    diagnostics.push({ severity: 'error', code, message, path });
+  };
   if (!dsl || typeof dsl !== 'object' || Array.isArray(dsl)) {
-    return { valid: false, errors: ['DSL root must be an object'] };
+    fail(IED_DSL_CODES.ROOT_NOT_OBJECT, 'DSL root must be an object');
+    return { valid: false, errors, diagnostics };
   }
   if (dsl.schemaVersion !== undefined && dsl.schemaVersion !== DSL_SCHEMA_VERSION) {
-    errors.push(`Unsupported schemaVersion: ${dsl.schemaVersion}`);
+    fail(IED_DSL_CODES.SCHEMA_VERSION_UNSUPPORTED, `Unsupported schemaVersion: ${dsl.schemaVersion}`);
   }
 
   const ids = new Set<string>();
   const kinds = new Map<string, string>();
   if (!Array.isArray(dsl.nodes)) {
-    errors.push('nodes must be an array');
+    fail(IED_DSL_CODES.NODES_NOT_ARRAY, 'nodes must be an array');
   } else {
     dsl.nodes.forEach((node, index) => {
       const prefix = `nodes[${index}]`;
       if (!node || typeof node !== 'object') {
-        errors.push(`${prefix} must be an object`);
+        fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
         return;
       }
       if (typeof node.id !== 'string' || !node.id.trim()) {
-        errors.push(`${prefix}.id must be a non-empty string`);
+        fail(IED_DSL_CODES.ID_INVALID, `${prefix}.id must be a non-empty string`, prefix);
       } else if (ids.has(node.id)) {
-        errors.push(`${prefix}.id is duplicated: ${node.id}`);
+        fail(IED_DSL_CODES.ID_DUPLICATED, `${prefix}.id is duplicated: ${node.id}`, prefix);
       } else {
         ids.add(node.id);
         kinds.set(node.id, node.kind || 'state');
       }
       if (node.kind !== undefined && STATECHART_NODE_KINDS.indexOf(node.kind) === -1) {
-        errors.push(`${prefix}.kind must be one of ${STATECHART_NODE_KINDS.join('/')}`);
+        fail(IED_DSL_CODES.KIND_INVALID, `${prefix}.kind must be one of ${STATECHART_NODE_KINDS.join('/')}`, prefix);
       }
       ['left', 'top', 'width', 'height'].forEach((key) => {
         const value = (node as any)[key];
         if (value !== undefined && typeof value !== 'number') {
-          errors.push(`${prefix}.${key} must be a number when present`);
+          fail(IED_DSL_CODES.FIELD_TYPE, `${prefix}.${key} must be a number when present`, prefix);
         }
       });
     });
@@ -382,43 +432,43 @@ export function validateStatechartDsl(dsl: DslStatechartDocument): DslValidation
       }
       const prefix = `nodes[${index}]`;
       if (typeof node.parent !== 'string' || !node.parent.trim() || !ids.has(node.parent)) {
-        errors.push(`${prefix}.parent must reference an existing node id`);
+        fail(IED_DSL_CODES.PARENT_UNKNOWN, `${prefix}.parent must reference an existing node id`, prefix);
         return;
       }
       if (node.parent === node.id) {
-        errors.push(`${prefix}.parent must not reference itself`);
+        fail(IED_DSL_CODES.PARENT_SELF, `${prefix}.parent must not reference itself`, prefix);
         return;
       }
       if (kinds.get(node.parent) !== 'composite') {
-        errors.push(`${prefix}.parent must reference a composite state`);
+        fail(IED_DSL_CODES.PARENT_KIND, `${prefix}.parent must reference a composite state`, prefix);
       }
     });
   }
 
   if (dsl.edges !== undefined && !Array.isArray(dsl.edges)) {
-    errors.push('edges must be an array when present');
+    fail(IED_DSL_CODES.EDGES_NOT_ARRAY, 'edges must be an array when present');
   } else {
     (dsl.edges || []).forEach((edge, index) => {
       const prefix = `edges[${index}]`;
       if (!edge || typeof edge !== 'object') {
-        errors.push(`${prefix} must be an object`);
+        fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
         return;
       }
       if (typeof edge.source !== 'string' || !edge.source.trim() || !ids.has(edge.source)) {
-        errors.push(`${prefix}.source must reference an existing node id`);
+        fail(IED_DSL_CODES.EDGE_ENDPOINT_UNKNOWN, `${prefix}.source must reference an existing node id`, prefix);
       }
       if (typeof edge.target !== 'string' || !edge.target.trim() || !ids.has(edge.target)) {
-        errors.push(`${prefix}.target must reference an existing node id`);
+        fail(IED_DSL_CODES.EDGE_ENDPOINT_UNKNOWN, `${prefix}.target must reference an existing node id`, prefix);
       }
       ['event', 'guard', 'action', 'label'].forEach((key) => {
         const value = (edge as any)[key];
         if (value !== undefined && typeof value !== 'string') {
-          errors.push(`${prefix}.${key} must be a string when present`);
+          fail(IED_DSL_CODES.FIELD_TYPE, `${prefix}.${key} must be a string when present`, prefix);
         }
       });
     });
   }
-  return { valid: errors.length === 0, errors };
+  return { valid: errors.length === 0, errors, diagnostics };
 }
 
 /**
@@ -428,123 +478,143 @@ export function validateStatechartDsl(dsl: DslStatechartDocument): DslValidation
  */
 export function validateGanttDsl(dsl: DslGanttDocument): DslValidationResult {
   const errors: string[] = [];
+  /**
+   * 记一条错误：`errors` 保持原来的英文句子（兼容既有调用方）；
+   * `diagnostics` 带稳定码与位置（Agent / 工具据此分支，不要去匹配 message）。
+   */
+  const diagnostics: IedDslDiagnostic[] = [];
+  const fail = (code: string, message: string, path?: string) => {
+    errors.push(message);
+    diagnostics.push({ severity: 'error', code, message, path });
+  };
   if (!dsl || typeof dsl !== 'object' || Array.isArray(dsl)) {
-    return { valid: false, errors: ['DSL root must be an object'] };
+    fail(IED_DSL_CODES.ROOT_NOT_OBJECT, 'DSL root must be an object');
+    return { valid: false, errors, diagnostics };
   }
   if (dsl.schemaVersion !== undefined && dsl.schemaVersion !== DSL_SCHEMA_VERSION) {
-    errors.push(`Unsupported schemaVersion: ${dsl.schemaVersion}`);
+    fail(IED_DSL_CODES.SCHEMA_VERSION_UNSUPPORTED, `Unsupported schemaVersion: ${dsl.schemaVersion}`);
   }
 
   const ids = new Set<string>();
   if (!Array.isArray(dsl.nodes)) {
-    errors.push('nodes must be an array');
+    fail(IED_DSL_CODES.NODES_NOT_ARRAY, 'nodes must be an array');
   } else {
     dsl.nodes.forEach((task, index) => {
       const prefix = `nodes[${index}]`;
       if (!task || typeof task !== 'object') {
-        errors.push(`${prefix} must be an object`);
+        fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
         return;
       }
       if (typeof task.id !== 'string' || !task.id.trim()) {
-        errors.push(`${prefix}.id must be a non-empty string`);
+        fail(IED_DSL_CODES.ID_INVALID, `${prefix}.id must be a non-empty string`, prefix);
       } else if (ids.has(task.id)) {
-        errors.push(`${prefix}.id is duplicated: ${task.id}`);
+        fail(IED_DSL_CODES.ID_DUPLICATED, `${prefix}.id is duplicated: ${task.id}`, prefix);
       } else {
         ids.add(task.id);
       }
       if (typeof task.start !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(task.start)) {
-        errors.push(`${prefix}.start must be a "YYYY-MM-DD" string`);
+        fail(IED_DSL_CODES.FIELD_FORMAT, `${prefix}.start must be a "YYYY-MM-DD" string`, prefix);
       }
       if (task.days !== undefined && !(Number(task.days) >= 1)) {
-        errors.push(`${prefix}.days must be a number >= 1 when present`);
+        fail(IED_DSL_CODES.FIELD_RANGE, `${prefix}.days must be a number >= 1 when present`, prefix);
       }
       if (task.progress !== undefined) {
         const progress = Number(task.progress);
         if (!(progress >= 0 && progress <= 1)) {
-          errors.push(`${prefix}.progress must be between 0 and 1 when present`);
+          fail(IED_DSL_CODES.FIELD_RANGE, `${prefix}.progress must be between 0 and 1 when present`, prefix);
         }
       }
       if (task.row !== undefined && !(Number(task.row) >= 0)) {
-        errors.push(`${prefix}.row must be a number >= 0 when present`);
+        fail(IED_DSL_CODES.FIELD_RANGE, `${prefix}.row must be a number >= 0 when present`, prefix);
       }
     });
   }
 
   if (dsl.edges !== undefined && !Array.isArray(dsl.edges)) {
-    errors.push('edges must be an array when present');
+    fail(IED_DSL_CODES.EDGES_NOT_ARRAY, 'edges must be an array when present');
   } else {
     (dsl.edges || []).forEach((edge, index) => {
       const prefix = `edges[${index}]`;
       if (!edge || typeof edge !== 'object') {
-        errors.push(`${prefix} must be an object`);
+        fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
         return;
       }
       if (typeof edge.source !== 'string' || !edge.source.trim() || !ids.has(edge.source)) {
-        errors.push(`${prefix}.source must reference an existing task id`);
+        fail(IED_DSL_CODES.EDGE_ENDPOINT_UNKNOWN, `${prefix}.source must reference an existing task id`, prefix);
       }
       if (typeof edge.target !== 'string' || !edge.target.trim() || !ids.has(edge.target)) {
-        errors.push(`${prefix}.target must reference an existing task id`);
+        fail(IED_DSL_CODES.EDGE_ENDPOINT_UNKNOWN, `${prefix}.target must reference an existing task id`, prefix);
       }
     });
   }
-  return { valid: errors.length === 0, errors };
+  return { valid: errors.length === 0, errors, diagnostics };
 }
 
 /** ER 文档校验（原有实现，保持不变） */
 function validateErDsl(dsl: any): DslValidationResult {
   const errors: string[] = [];
+  /**
+   * 记一条错误：`errors` 保持原来的英文句子（兼容既有调用方）；
+   * `diagnostics` 带稳定码与位置（Agent / 工具据此分支，不要去匹配 message）。
+   */
+  const diagnostics: IedDslDiagnostic[] = [];
+  const fail = (code: string, message: string, path?: string) => {
+    errors.push(message);
+    diagnostics.push({ severity: 'error', code, message, path });
+  };
   if (!dsl || typeof dsl !== 'object' || Array.isArray(dsl)) {
-    return { valid: false, errors: ['DSL root must be an object'] };
+    fail(IED_DSL_CODES.ROOT_NOT_OBJECT, 'DSL root must be an object');
+    return { valid: false, errors, diagnostics };
   }
   if (dsl.schemaVersion !== undefined && dsl.schemaVersion !== DSL_SCHEMA_VERSION) {
-    errors.push(`Unsupported schemaVersion: ${dsl.schemaVersion}`);
+    fail(IED_DSL_CODES.SCHEMA_VERSION_UNSUPPORTED, `Unsupported schemaVersion: ${dsl.schemaVersion}`);
   }
   if (!Array.isArray(dsl.entities)) {
-    errors.push('entities must be an array');
+    fail(IED_DSL_CODES.ENTITIES_NOT_ARRAY, 'entities must be an array');
   } else {
     const ids = new Set<string>();
     dsl.entities.forEach((entity, index) => {
       const prefix = `entities[${index}]`;
       if (!entity || typeof entity !== 'object') {
-        errors.push(`${prefix} must be an object`);
+        fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
         return;
       }
       if (typeof entity.id !== 'string' || !entity.id.trim()) {
-        errors.push(`${prefix}.id must be a non-empty string`);
+        fail(IED_DSL_CODES.ID_INVALID, `${prefix}.id must be a non-empty string`, prefix);
       } else if (ids.has(entity.id)) {
-        errors.push(`${prefix}.id is duplicated: ${entity.id}`);
+        fail(IED_DSL_CODES.ID_DUPLICATED, `${prefix}.id is duplicated: ${entity.id}`, prefix);
       } else {
         ids.add(entity.id);
       }
       if (!Array.isArray(entity.fields)) {
-        errors.push(`${prefix}.fields must be an array`);
+        fail(IED_DSL_CODES.FIELDS_NOT_ARRAY, `${prefix}.fields must be an array`, prefix);
       } else {
         entity.fields.forEach((field, fieldIndex) => {
           if (!field || typeof field !== 'object' || typeof field.name !== 'string' || !field.name.trim()) {
-            errors.push(`${prefix}.fields[${fieldIndex}].name must be a non-empty string`);
+            fail(IED_DSL_CODES.FIELD_NAME_INVALID, `${prefix}.fields[${fieldIndex}].name must be a non-empty string`, prefix);
           }
         });
       }
     });
   }
   if (dsl.relations !== undefined && !Array.isArray(dsl.relations)) {
-    errors.push('relations must be an array');
+    fail(IED_DSL_CODES.RELATIONS_NOT_ARRAY, 'relations must be an array');
   } else {
     (dsl.relations || []).forEach((relation, index) => {
       const prefix = `relations[${index}]`;
       if (!relation || typeof relation !== 'object') {
-        errors.push(`${prefix} must be an object`);
+        fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
       } else {
         if (typeof relation.source !== 'string' || !relation.source.trim()) {
-          errors.push(`${prefix}.source must be a non-empty string`);
+          fail(IED_DSL_CODES.EDGE_ENDPOINT_INVALID, `${prefix}.source must be a non-empty string`, prefix);
         }
         if (typeof relation.target !== 'string' || !relation.target.trim()) {
-          errors.push(`${prefix}.target must be a non-empty string`);
+          fail(IED_DSL_CODES.EDGE_ENDPOINT_INVALID, `${prefix}.target must be a non-empty string`, prefix);
         }
       }
     });
   }
-  return { valid: errors.length === 0, errors };
+  return { valid: errors.length === 0, errors, diagnostics };
 }
 
 /**
@@ -555,29 +625,38 @@ function validateErDsl(dsl: any): DslValidationResult {
  */
 export function validatePowerDsl(dsl: DslPowerDocument): DslValidationResult {
   const errors: string[] = [];
+  /**
+   * 记一条错误：`errors` 保持原来的英文句子（兼容既有调用方）；
+   * `diagnostics` 带稳定码与位置（Agent / 工具据此分支，不要去匹配 message）。
+   */
+  const diagnostics: IedDslDiagnostic[] = [];
+  const fail = (code: string, message: string, path?: string) => {
+    errors.push(message);
+    diagnostics.push({ severity: 'error', code, message, path });
+  };
   const nodes = Array.isArray(dsl.nodes) ? dsl.nodes : [];
   if (!Array.isArray(dsl.nodes)) {
-    errors.push('nodes must be an array');
+    fail(IED_DSL_CODES.NODES_NOT_ARRAY, 'nodes must be an array');
   }
   const ids = new Set<string>();
   nodes.forEach((node: any, index: number) => {
     const prefix = `nodes[${index}]`;
     if (!node || typeof node !== 'object') {
-      errors.push(`${prefix} must be an object`);
+      fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
       return;
     }
     if (typeof node.id !== 'string' || !node.id) {
-      errors.push(`${prefix}.id must be a non-empty string`);
+      fail(IED_DSL_CODES.ID_INVALID, `${prefix}.id must be a non-empty string`, prefix);
     } else if (ids.has(node.id)) {
-      errors.push(`duplicated node id: ${node.id}`);
+      fail(IED_DSL_CODES.ID_DUPLICATED, `duplicated node id: ${node.id}`);
     } else {
       ids.add(node.id);
     }
     if (POWER_DSL_KINDS.indexOf(node.kind) === -1) {
-      errors.push(`${prefix}.kind must be one of ${POWER_DSL_KINDS.join(' / ')}`);
+      fail(IED_DSL_CODES.KIND_INVALID, `${prefix}.kind must be one of ${POWER_DSL_KINDS.join(' / ')}`, prefix);
     }
     if (node.voltageLevel !== undefined && !/^\d+(\.\d+)?kV$/.test(String(node.voltageLevel))) {
-      errors.push(`${prefix}.voltageLevel must look like "110kV"`);
+      fail(IED_DSL_CODES.FIELD_FORMAT, `${prefix}.voltageLevel must look like "110kV"`, prefix);
     }
   });
   nodes.forEach((node: any, index: number) => {
@@ -586,28 +665,28 @@ export function validatePowerDsl(dsl: DslPowerDocument): DslValidationResult {
     }
     const bus = nodes.find((item: any) => item && item.id === node.attachedTo);
     if (!bus) {
-      errors.push(`nodes[${index}].attachedTo references an unknown node: ${node.attachedTo}`);
+      fail(IED_DSL_CODES.ATTACHED_TO_UNKNOWN, `nodes[${index}].attachedTo references an unknown node: ${node.attachedTo}`);
       return;
     }
     if (bus.kind !== 'busbar') {
-      errors.push(`nodes[${index}].attachedTo must point at a busbar: ${node.attachedTo} is ${bus.kind}`);
+      fail(IED_DSL_CODES.ATTACHED_TO_NOT_BUSBAR, `nodes[${index}].attachedTo must point at a busbar: ${node.attachedTo} is ${bus.kind}`);
     }
   });
   (dsl.edges || []).forEach((edge: any, index: number) => {
     const prefix = `edges[${index}]`;
     if (!edge || typeof edge !== 'object') {
-      errors.push(`${prefix} must be an object`);
+      fail(IED_DSL_CODES.NOT_OBJECT, `${prefix} must be an object`, prefix);
       return;
     }
     if (!ids.has(edge.source)) {
-      errors.push(`${prefix}.source references an unknown node: ${edge.source}`);
+      fail(IED_DSL_CODES.EDGE_ENDPOINT_UNKNOWN, `${prefix}.source references an unknown node: ${edge.source}`, prefix);
     }
     if (!ids.has(edge.target)) {
-      errors.push(`${prefix}.target references an unknown node: ${edge.target}`);
+      fail(IED_DSL_CODES.EDGE_ENDPOINT_UNKNOWN, `${prefix}.target references an unknown node: ${edge.target}`, prefix);
     }
     if (edge.source === edge.target) {
-      errors.push(`${prefix} must not connect a node to itself`);
+      fail(IED_DSL_CODES.EDGE_SELF_LOOP, `${prefix} must not connect a node to itself`, prefix);
     }
   });
-  return { valid: errors.length === 0, errors };
+  return { valid: errors.length === 0, errors, diagnostics };
 }

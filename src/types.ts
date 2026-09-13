@@ -237,9 +237,85 @@ export type DslDocument =
   | DslStatechartDocument
   | DslGanttDocument;
 
+/**
+ * 稳定诊断码。
+ *
+ * `errors: string[]` 是**给人读的英文句子**（保持原样，兼容既有调用方）；
+ * `diagnostics` 是给**机器读的**：`code` 是合同（Agent / 工具据此分支、纠错、转述），
+ * `path` 指出位置。契约见 ice-render `docs/architecture/17-i18n-boundary.md`：
+ * 引擎/库不翻译文案，但必须给稳定 id，否则消费方只能匹配自然语言。
+ */
+export const IED_DSL_CODES = {
+  /** 根节点不是对象 */
+  ROOT_NOT_OBJECT: 'IED_DSL_ROOT_NOT_OBJECT',
+  /** `schemaVersion` 不受支持 */
+  SCHEMA_VERSION_UNSUPPORTED: 'IED_DSL_SCHEMA_VERSION_UNSUPPORTED',
+  /** 节点/连线本身不是对象 */
+  NOT_OBJECT: 'IED_DSL_NOT_OBJECT',
+  /** `id` 缺失或不是非空字符串 */
+  ID_INVALID: 'IED_DSL_ID_INVALID',
+  /** `id` 重复 */
+  ID_DUPLICATED: 'IED_DSL_ID_DUPLICATED',
+  /** `nodes` 不是数组 */
+  NODES_NOT_ARRAY: 'IED_DSL_NODES_NOT_ARRAY',
+  /** `edges` 不是数组 */
+  EDGES_NOT_ARRAY: 'IED_DSL_EDGES_NOT_ARRAY',
+  /** `entities` 不是数组 */
+  ENTITIES_NOT_ARRAY: 'IED_DSL_ENTITIES_NOT_ARRAY',
+  /** `relations` 不是数组 */
+  RELATIONS_NOT_ARRAY: 'IED_DSL_RELATIONS_NOT_ARRAY',
+  /** `fields` 不是数组 */
+  FIELDS_NOT_ARRAY: 'IED_DSL_FIELDS_NOT_ARRAY',
+  /** `kind` / `type` 不在允许集合里 */
+  KIND_INVALID: 'IED_DSL_KIND_INVALID',
+  /** 字段类型不对（应为字符串 / 数字 / 字符串数组） */
+  FIELD_TYPE: 'IED_DSL_FIELD_TYPE',
+  /** 字段取值不在枚举集合里 */
+  FIELD_ENUM: 'IED_DSL_FIELD_ENUM',
+  /** 字段格式不对（日期、电压等级等） */
+  FIELD_FORMAT: 'IED_DSL_FIELD_FORMAT',
+  /** 字段取值越界（行号 / 天数 / 进度） */
+  FIELD_RANGE: 'IED_DSL_FIELD_RANGE',
+  /** 字段名（如 `fields[i].name`）非法 */
+  FIELD_NAME_INVALID: 'IED_DSL_FIELD_NAME_INVALID',
+  /** 连线端点不是非空字符串 */
+  EDGE_ENDPOINT_INVALID: 'IED_DSL_EDGE_ENDPOINT_INVALID',
+  /** 连线端点指向不存在的节点 */
+  EDGE_ENDPOINT_UNKNOWN: 'IED_DSL_EDGE_ENDPOINT_UNKNOWN',
+  /** 连线自环 */
+  EDGE_SELF_LOOP: 'IED_DSL_EDGE_SELF_LOOP',
+  /** `parent` 不是非空字符串 */
+  PARENT_INVALID: 'IED_DSL_PARENT_INVALID',
+  /** `parent` 指向不存在的节点 */
+  PARENT_UNKNOWN: 'IED_DSL_PARENT_UNKNOWN',
+  /** `parent` 指向自己 */
+  PARENT_SELF: 'IED_DSL_PARENT_SELF',
+  /** `parent` 指向了不允许的节点类型（池 / 泳道 / 复合状态…） */
+  PARENT_KIND: 'IED_DSL_PARENT_KIND',
+  /** 该节点不允许有 `parent`（如池） */
+  PARENT_NOT_ALLOWED: 'IED_DSL_PARENT_NOT_ALLOWED',
+  /** `attachedTo` 指向不存在的节点 */
+  ATTACHED_TO_UNKNOWN: 'IED_DSL_ATTACHED_TO_UNKNOWN',
+  /** `attachedTo` 指向的不是母线 */
+  ATTACHED_TO_NOT_BUSBAR: 'IED_DSL_ATTACHED_TO_NOT_BUSBAR',
+} as const;
+
+export type IedDslDiagnostic = {
+  severity: 'error' | 'warning';
+  /** 稳定诊断码（见 {@link IED_DSL_CODES}） */
+  code: string;
+  /** 默认英文文案（给人看；机器请用 code） */
+  message: string;
+  /** 出问题的位置，如 `nodes[3].source` */
+  path?: string;
+};
+
 export type DslValidationResult = {
   valid: boolean;
+  /** 英文错误句子（保持原样，兼容既有调用方） */
   errors: string[];
+  /** 稳定诊断（含 code / path）：Agent 与工具用它做分支与纠错 */
+  diagnostics: IedDslDiagnostic[];
 };
 
 /** 运行时判别：带 kind: 'flowchart' 的按流程图文档处理 */

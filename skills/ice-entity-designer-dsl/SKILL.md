@@ -1143,6 +1143,19 @@ Call `validateDsl()` before rendering. The validator checks:
 - field names are non-empty
 - relations reference existing entity ids
 
+### Diagnose by `code`, never by `message`
+
+`validateDsl()` returns `{ valid, errors, diagnostics }`:
+
+- `errors`: English sentences (human-readable);
+- `diagnostics`: `{ severity, code, message, path }` — **`code` is the contract**
+  (`IED_DSL_*`, e.g. `IED_DSL_ID_DUPLICATED`, `IED_DSL_EDGE_ENDPOINT_UNKNOWN`,
+  `IED_DSL_PARENT_KIND`), and `path` locates the offender (`nodes[3].source`).
+
+Branch on `code` and patch `path`; do **not** pattern-match `message` (it can change wording
+without notice). Same rule as ice-render's `ICE_ERROR_CODES` for engine errors — see
+`docs/architecture/17-i18n-boundary.md` in the ice-render repo.
+
 ## Rendering
 
 ### Runtime requirements
