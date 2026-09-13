@@ -46,15 +46,18 @@ The package contains:
 npm install ice-entity-designer-dsl
 ```
 
-This installs `ice-entity-designer` as well (the DSL runtime renders through it; the engine
-kernel ships bundled in that package). For the browser build, load
-`node_modules/ice-entity-designer/dist/index.umd.js` first, then `dist/index.umd.js` — see below.
+This installs `ice-entity-designer` as well (the DSL runtime renders through it). The engine
+(`ice-render`) is a **peer dependency** of both packages and stays **external** in the UMD builds
+(`globals: { 'ice-render': 'ICE' }` / `{ 'ice-entity-designer': 'IED' }`), so a plain `<script>`
+page must load the three UMDs **in this order**: `ice-render` → `ice-entity-designer` → `dist/index.umd.js`
+— see below.
 
 ## Browser usage
 
 ```html
 <canvas id="canvas" width="1200" height="800"></canvas>
 
+<script src="node_modules/ice-render/dist/index.umd.js"></script>
 <script src="node_modules/ice-entity-designer/dist/index.umd.js"></script>
 <script src="dist/index.umd.js"></script>
 <script>
