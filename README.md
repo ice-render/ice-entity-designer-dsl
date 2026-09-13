@@ -256,6 +256,18 @@ intermediate / end) + `trigger`, gateways carry `gatewayType` (exclusive / paral
 ## API
 
 - `validateDsl(dsl)` —— ER / flowchart / BPMN / UML / statechart / gantt / power documents (dispatches on `kind`); `validateFlowDsl(dsl)` / `validateBpmnDsl(dsl)` / `validateUmlDsl(dsl)` / `validateStatechartDsl(dsl)` / `validateGanttDsl(dsl)` / `validatePowerDsl(dsl)` for one kind only
+  - 返回值除了 `{ valid, errors }`（英文句子，给人看）还带 **`diagnostics`**：`{ severity, code, message, path }`，
+    其中 **`code` 才是合同**（`IED_DSL_*`，见 `src/types.ts` 的 `IED_DSL_CODES`），`path` 指出位置（如 `nodes[3].source`）。
+    **Agent / 工具请按 `code` 分支、按 `path` 定位**，不要匹配 `message` 里的自然语言 —— 这是
+    ice-render [`docs/architecture/17-i18n-boundary.md`](../ice-render/docs/architecture/17-i18n-boundary.md)
+    里那条「库不翻译文案，但必须给稳定 id」的契约。
+  - 常用码：`IED_DSL_ROOT_NOT_OBJECT` / `IED_DSL_SCHEMA_VERSION_UNSUPPORTED` / `IED_DSL_ID_INVALID` /
+    `IED_DSL_ID_DUPLICATED` / `IED_DSL_NOT_OBJECT` / `IED_DSL_NODES_NOT_ARRAY` / `IED_DSL_EDGES_NOT_ARRAY` /
+    `IED_DSL_KIND_INVALID` / `IED_DSL_FIELD_TYPE` / `IED_DSL_FIELD_ENUM` / `IED_DSL_FIELD_FORMAT` /
+    `IED_DSL_FIELD_RANGE` / `IED_DSL_EDGE_ENDPOINT_INVALID` / `IED_DSL_EDGE_ENDPOINT_UNKNOWN` /
+    `IED_DSL_EDGE_SELF_LOOP` / `IED_DSL_PARENT_INVALID` / `IED_DSL_PARENT_UNKNOWN` / `IED_DSL_PARENT_SELF` /
+    `IED_DSL_PARENT_KIND` / `IED_DSL_PARENT_NOT_ALLOWED` / `IED_DSL_ATTACHED_TO_UNKNOWN` /
+    `IED_DSL_ATTACHED_TO_NOT_BUSBAR`（完整列表见 `src/types.ts`）。
 - `compileDsl(dsl)` —— ER document → `Entity` / `Relation` props
 - `compileFlowDsl(dsl)` —— flowchart document → `FlowNode` / `FlowEdge` props (with layered auto-layout)
 - `compileBpmnDsl(dsl)` —— BPMN document → `FlowNode` / `FlowEdge` props (container auto-geometry + container-scoped auto-layout)
