@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate and round-trip JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, gantt schedules, power one-line diagrams) for ice-entity-designer — render them into editable instances and read user edits back with toDsl(). For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.5.0"
+version: "1.5.1"
 category: data
 platforms:
   - claude-code
@@ -981,10 +981,29 @@ applyDesignerChrome(ice);   // 重新套回设计器默认（幂等）
 - In a **JSON DSL document**, do not try to theme the chrome — the document describes the
   model, not the editor's UI. If the user asks for "our brand colours", either write
   explicit per-node/edge colours (data) or tell the host to call `setChrome` / `setTheme`.
-- Labels: `style.label` is the canonical location (see above). Style values may reference
-  theme tokens as plain strings (`"fillStyle": "$primary"`) — the engine resolves them at
-  paint time, so a host theme switch repaints them. That is the one place where a document
-  can be "theme-aware" without hard-coding a colour.
+- Labels: `style.label` is the canonical location (see above).
+- **Any style the engine paints can reference a theme token.** Designer nodes and edges *are*
+  engine components, so their style fields (`fillColor` / `strokeColor` / `textColor`,
+  `style.strokeStyle`, `style.label.*`) accept a token reference written as a plain string —
+  the engine resolves it at paint time, so a host theme switch repaints them:
+
+```json
+{ "kind": "flowchart",
+  "nodes": [
+    { "id": "a", "type": "process", "title": "审批",
+      "fillColor": "$primary", "strokeColor": "$border", "textColor": "$chrome.linkLabel.fill" }
+  ] }
+```
+
+  Available paths: `$primary` / `$success` / `$warning` / `$danger` / `$text` / `$muted` /
+  `$hint` / `$border` / `$background`, `$palette.<n>` (data-series colours),
+  `$chrome.<group>.<key>` (selection / handle / slot / guide / label / textSelection / shadow …),
+  and `$base.<token>` (radius / fontSize / spacing from the engine's base tokens).
+  `validateDsl()` checks them and reports `ICE_DSL_THEME_TOKEN_UNKNOWN` with the exact path.
+
+- **The trade-off to tell the user**: a token reference means the colour is *not* fixed in the
+  document — the same document renders differently under different host themes. Use literals
+  when the colour is domain semantics (see above), tokens when it should follow the host.
 
 ## Capability boundary
 
