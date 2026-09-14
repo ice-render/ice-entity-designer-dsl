@@ -13,6 +13,22 @@ from a JSON document. Three document kinds, one entry point (`ICEDSL.renderDsl`)
 - Flowchart — `kind: "flowchart"`, `nodes` / `edges` (optional layered auto-layout)
 - BPMN 2.0 — `kind: "bpmn"`, `nodes` / `edges` with pools and lanes as containers
 
+## Theme and style boundary
+
+The skill draws a clean line between the two, which prevents the usual "wrong colour" reports:
+
+- **Domain semantics stay in the document** — voltage-level colours (power one-line),
+  water/medium colours, UML / statechart / gantt palettes are *data*: persisted in the
+  snapshot, tested (medium switch → line colour), and deliberately **not** theme-driven.
+- **Chrome and default looks belong to the host** — selection box, handles, link hooks,
+  connection slots, alignment guides are drawn by the engine and themed (engine 2.4+);
+  the designer applies an antd-aligned chrome and a host can override it with
+  `ice.setChrome(...)` / `ice.setTheme(...)`. A JSON document never themes the editor UI.
+- **Labels live in `style.label`** (canonical since engine 2.4); the older top-level
+  `labelStyle` is a deprecated alias folded into it. Style values may reference theme
+  tokens as plain strings (`"fillStyle": "$primary"`) — the engine resolves them at paint
+  time, so a host theme switch repaints the diagram.
+
 ## Skill path
 
 ```text

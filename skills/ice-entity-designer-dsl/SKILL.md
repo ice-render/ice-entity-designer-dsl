@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate and round-trip JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, gantt schedules, power one-line diagrams) for ice-entity-designer — render them into editable instances and read user edits back with toDsl(). For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.4.3"
+version: "1.5.0"
 category: data
 platforms:
   - claude-code
@@ -796,9 +796,15 @@ Node kinds and their presets (`FLOW_NODE_KINDS`): `terminator` (start/end pill),
 
 Editable style props (all persisted in the snapshot): node `fillColor`,
 `strokeColor`, `textColor`, `fontSize`; edge `style.strokeStyle` (line + arrow fill),
-`style.lineWidth`, `labelStyle.fillStyle` (branch-label color). `updateNode()` /
-`updateEdge()` apply them immediately — remember `FlowNode.applyPatch()` rebuilds the
-shape/label children, so it is safe to change colors at runtime.
+`style.lineWidth`, and **`style.label.fillStyle`** (branch-label color).
+`updateNode()` / `updateEdge()` apply them immediately — remember `FlowNode.applyPatch()`
+rebuilds the shape/label children, so it is safe to change colors at runtime.
+
+> **Appearance lives in `style`** (engine 2.4+): sub-element looks are nested as
+> `style.<element>` — the canonical place for a link label is `style.label`
+> (`fontSize` / `fillStyle` / `backgroundColor` / padding). The older top-level
+> `labelStyle` is accepted as a **deprecated alias** (folded into `style.label` at
+> construction, with `style.label` winning) — generate the canonical form.
 
 ### Document format (v2 = the engine's own serialization)
 
@@ -948,6 +954,37 @@ Rules that keep this loop from wrecking the user's work:
   too (otherwise `validateDsl()` will report a dangling endpoint — call it before rendering).
 - **Always re-render with the patched document** (`validateDsl(next)` first) and keep the new
   result — that result, not your original `doc`, is what the next turn should read from.
+
+## Theme and style: what the DSL controls, and what the host controls
+
+Two different things, and mixing them up is the usual source of "why is my diagram
+the wrong colour" reports:
+
+- **Domain semantics stay in the document.** Voltage-level colours (power one-line),
+  water/medium colours (water process), UML / statechart / gantt palettes are *data*:
+  they are persisted in the snapshot, they are what makes the diagram readable
+  (`medium switch → line colour changes` is a tested behaviour), and they do **not**
+  follow a theme. When a document needs a specific colour, write the explicit value.
+- **Chrome and default looks come from the host.** The canvas chrome — selection box,
+  resize/rotate handles, link hooks, connection slots, alignment guides, the label
+  edit selection — is drawn by the engine and themed (engine 2.4+). The designer applies
+  its own antd-aligned chrome automatically, and a host application can override any of it:
+
+```ts
+import { applyDesignerChrome } from 'ice-entity-designer';
+import { token } from 'ice-render';
+
+ice.setChrome({ handle: { fill: '#7c3aed', stroke: '#ffffff' }, guide: { color: '#7c3aed' } });
+applyDesignerChrome(ice);   // 重新套回设计器默认（幂等）
+```
+
+- In a **JSON DSL document**, do not try to theme the chrome — the document describes the
+  model, not the editor's UI. If the user asks for "our brand colours", either write
+  explicit per-node/edge colours (data) or tell the host to call `setChrome` / `setTheme`.
+- Labels: `style.label` is the canonical location (see above). Style values may reference
+  theme tokens as plain strings (`"fillStyle": "$primary"`) — the engine resolves them at
+  paint time, so a host theme switch repaints them. That is the one place where a document
+  can be "theme-aware" without hard-coding a colour.
 
 ## Capability boundary
 
