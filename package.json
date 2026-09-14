@@ -1,6 +1,6 @@
 {
   "name": "ice-entity-designer-dsl",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "description": "A JSON-first DSL layer for AI agents to drive ice-entity-designer.",
   "repository": {
     "type": "git",
@@ -23,7 +23,7 @@
     "types:check": "tsc --noEmit"
   },
   "dependencies": {
-    "ice-entity-designer": "^0.2.0"
+    "ice-entity-designer": "^0.2.8"
   },
   "devDependencies": {
     "@babel/core": "7.28.5",
