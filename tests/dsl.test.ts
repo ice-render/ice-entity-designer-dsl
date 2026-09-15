@@ -722,13 +722,26 @@ describe('ice-entity-designer-dsl · 布局意图（layoutSpec）', () => {
         calls.push({ props: this.props, target });
       }
     }
-    const ice: any = { getType: (typeId: string) => (typeId === 'ice-render:ICELayeredLayout' ? FakeLayout : null) };
+    const ice: any = {
+      canvasWidth: 1200,
+      canvasHeight: 800,
+      childNodes: [{ props: { id: 'a' } }],
+      getType: (typeId: string) => (typeId === 'ice-render:ICELayeredLayout' ? FakeLayout : null),
+    };
     (globalThis as any).__applySceneLayoutForTest = undefined;
     // 直接调内部函数：DSL 的 runtime 只导出 renderDsl（要 canvas），这里走单测专用的导出
     const { __applySceneLayout } = require('../src/runtime/renderDsl');
     __applySceneLayout(ice, { layout: 'layered', layoutSpec: { type: 'ice-render:ICELayeredLayout', props: { gapX: 5, gapY: 6, direction: 'vertical' } } }, {});
     expect(calls).toHaveLength(1);
     expect(calls[0].props).toEqual({ gapX: 5, gapY: 6, direction: 'vertical' });
-    expect(calls[0].target).toBe(ice);
+    // ⚠️ **不能把 ICE 实例本身交给布局器**：引擎的 `ICELayoutManager` 契约要求容器有 `state`
+    // （`contentBox()` / `paddingOf()` 从它读宽高与 padding），而 ICE 没有 `state` ——
+    // 旧实现直接传 `ice`，于是 `layoutContainer` 在 `container.state.padding` 上抛
+    // `TypeError: Cannot read properties of undefined (reading 'padding')`
+    // （`entity-editor-dsl.html` 从引擎 2.7 起就一直打不开，因为没有 e2e 兜底）。
+    // 现在传的是"ICE 根的容器视图"：同一个 childNodes，尺寸取画布尺寸，padding 0。
+    expect(calls[0].target).not.toBe(ice);
+    expect(calls[0].target.childNodes).toBe(ice.childNodes);
+    expect(calls[0].target.state).toEqual({ width: 1200, height: 800, padding: 0 });
   });
 });

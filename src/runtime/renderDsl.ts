@@ -432,6 +432,33 @@ export function renderFlowDsl(canvasOrId: any, dsl: DslFlowDocument): RenderFlow
   return withDsl({ kind: 'flowchart', ice, designer });
 }
 
+/**
+ * 把「ICE 根」包装成布局器期望的**容器视图**。
+ *
+ * 为什么需要：DSL 场景里节点与连线直接挂在 ICE 根下 —— ICE 根就是那个"容器"。
+ * 但引擎的 `ICELayoutManager` 契约要求容器有 `state`（宽度 / 高度 / padding：
+ * `contentBox()` / `paddingOf()` 都从它读），而 `ICE` 实例没有 `state`，
+ * 于是 `layoutContainer(ice)` 在 `container.state.padding` 上抛
+ * `TypeError: Cannot read properties of undefined (reading 'padding')`。
+ *
+ * 这个缺陷从引擎 2.7 引入「内外距」机制起就存在，一直没暴露是因为 `examples/entity-editor-dsl.html`
+ * 没有 e2e、文档站也没嵌 DSL 示例页（2026-09-15 补 e2e 时第一次真机跑它才发现；
+ * 用引擎 2.10.1 复现同样的栈，确认与 2.11 无关）。
+ *
+ * 只提供容器视图、**不改场景树**：节点依旧是 ICE 根的子节点，布局只是把算好的
+ * `left/top` 写回这些节点。
+ */
+function asSceneContainer(ice: any): any {
+  return {
+    state: {
+      width: Number(ice && ice.canvasWidth) || 0,
+      height: Number(ice && ice.canvasHeight) || 0,
+      padding: 0,
+    },
+    childNodes: (ice && ice.childNodes) || [],
+  };
+}
+
 /** 按场景里的**布局意图**排一次；旧场景（没有 layoutSpec）走历史上的 ER 默认参数。 */
 export function __applySceneLayout(ice: any, scene: any, options: any): void {
   const spec = scene && scene.layoutSpec;
@@ -439,7 +466,7 @@ export function __applySceneLayout(ice: any, scene: any, options: any): void {
     const Ctor = typeof ice.getType === 'function' ? ice.getType(spec.type) : null;
     const manager = typeof Ctor === 'function' ? new Ctor(spec.props || {}) : null;
     if (manager && typeof manager.layoutContainer === 'function') {
-      manager.layoutContainer(ice);
+      manager.layoutContainer(asSceneContainer(ice));
       return;
     }
   }
@@ -448,7 +475,7 @@ export function __applySceneLayout(ice: any, scene: any, options: any): void {
     new ICELayeredLayout({
       gapX: options.gapX || 120,
       gapY: options.gapY || 50,
-    }).layoutContainer(ice);
+    }).layoutContainer(asSceneContainer(ice));
   }
 }
 
