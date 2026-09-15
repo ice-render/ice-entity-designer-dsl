@@ -1,5 +1,5 @@
 import type { DslUmlDocument, DslUmlEdge, DslUmlNode, DslUmlNodeKind, DslUmlRelationType } from '../types';
-import { layeredLayout } from './layout';
+import { buildLayeredLayoutSpec, layeredLayout } from './layout';
 
 export type CompiledUmlNode = {
   id: string;
@@ -27,6 +27,8 @@ export type CompiledUmlScene = {
   nodes: CompiledUmlNode[];
   edges: CompiledUmlEdge[];
   layout: string;
+  /** 布局意图（引擎布局描述符）：运行期/再次自动布局照单执行，与编译期坐标一致 */
+  layoutSpec?: import('./layout').DslLayoutSpec | null;
   options?: Record<string, any>;
 };
 
@@ -106,5 +108,15 @@ export function compileUmlDsl(dsl: DslUmlDocument): CompiledUmlScene {
     if (Number.isNaN(node.top)) node.top = 0;
   });
 
-  return { kind: 'uml', nodes, edges, layout, options };
+  const gapX = Number(options.gapX) || 80;
+  const gapY = Number(options.gapY) || 110;
+  return {
+    kind: 'uml',
+    nodes,
+    edges,
+    layout,
+    // 与编译期算坐标用的是同一套参数（方向 vertical：父类在上、子类在下）
+    layoutSpec: layout === 'none' ? null : buildLayeredLayoutSpec({ gapX, gapY, direction: 'vertical' }),
+    options,
+  };
 }

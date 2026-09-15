@@ -1,6 +1,6 @@
 import { FLOW_NODE_KINDS, FlowNode } from 'ice-entity-designer';
 import type { DslFlowDocument, DslFlowEdge, DslFlowNode, DslFlowNodeKind } from '../types';
-import { layeredLayout } from './layout';
+import { buildLayeredLayoutSpec, layeredLayout } from './layout';
 
 export type CompiledFlowNode = {
   id: string;
@@ -30,6 +30,8 @@ export type CompiledFlowScene = {
   nodes: CompiledFlowNode[];
   edges: CompiledFlowEdge[];
   layout: string;
+  /** 布局意图（引擎布局描述符） */
+  layoutSpec?: import('./layout').DslLayoutSpec | null;
   options?: Record<string, any>;
 };
 
@@ -110,5 +112,13 @@ export function compileFlowDsl(dsl: DslFlowDocument): CompiledFlowScene {
     if (Number.isNaN(node.top)) node.top = 0;
   });
 
-  return { kind: 'flowchart', nodes, edges, layout, options };
+  return {
+    kind: 'flowchart',
+    nodes,
+    edges,
+    layout,
+    layoutSpec:
+      layout === 'none' ? null : buildLayeredLayoutSpec({ gapX: Number(options.gapX) || 90, gapY: Number(options.gapY) || 90 }),
+    options,
+  };
 }

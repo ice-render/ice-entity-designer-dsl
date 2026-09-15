@@ -668,3 +668,67 @@ describe('ice-entity-designer-dsl · 电力一次系统图文档', () => {
     expect(Number.isFinite(fallback.nodes[0].top)).toBe(true);
   });
 });
+
+/* ---------------- 布局意图（layoutSpec）：编译器输出，运行期照单执行 ---------------- */
+
+describe('ice-entity-designer-dsl · 布局意图（layoutSpec）', () => {
+  it('流程图：场景带上分层布局意图（纵向、与编译期参数一致）', () => {
+    const scene: any = compileFlowDsl({
+      kind: 'flow',
+      nodes: [{ id: 'a', title: 'A' }, { id: 'b', title: 'B' }],
+      edges: [{ from: 'a', to: 'b' }],
+      options: { gapX: 40, gapY: 70 },
+    } as any);
+    expect(scene.layoutSpec).toEqual({
+      type: 'ice-render:ICELayeredLayout',
+      // 编译器的 gapX/gapY 是"层内/层间"，引擎内核刚好相反 —— 换算是刻意的
+      props: { gapX: 70, gapY: 40, direction: 'vertical', crossAlign: 'center' },
+    });
+  });
+
+  it('UML：纵向、间距 110/80；BPMN：横向', () => {
+    const uml: any = compileUmlDsl({
+      kind: 'uml',
+      nodes: [{ id: 'Child', title: 'Child' }],
+      relations: [],
+    } as any);
+    expect(uml.layoutSpec.props.direction).toBe('vertical');
+    expect(uml.layoutSpec.props.gapX).toBe(110); // 层间距 = 编译器的 gapY 默认 110
+
+    const bpmn: any = compileBpmnDsl({
+      kind: 'bpmn',
+      nodes: [{ id: 'p1', title: '池', kind: 'pool' }, { id: 't1', title: '任务', parent: 'p1' }],
+      edges: [],
+    } as any);
+    expect(bpmn.layoutSpec.props.direction).toBe('horizontal');
+  });
+
+  it('显式 layout: none 时不给意图（调用方要保留手写坐标）', () => {
+    const scene: any = compileFlowDsl({
+      kind: 'flow',
+      nodes: [{ id: 'a', left: 10, top: 20 }, { id: 'b', left: 90, top: 20 }],
+      edges: [],
+      options: { layout: 'none' },
+    } as any);
+    expect(scene.layoutSpec).toBe(null);
+  });
+
+  it('运行期按意图执行：从场景取 typeId 反查构造函数、用 props 构造并排版', () => {
+    // 用假的 ICE 实例验证"照单执行"：getType 返回一个记录调用的假布局类
+    const calls: Array<{ props: any; target: any }> = [];
+    class FakeLayout {
+      constructor(public props: any) {}
+      layoutContainer(target: any): void {
+        calls.push({ props: this.props, target });
+      }
+    }
+    const ice: any = { getType: (typeId: string) => (typeId === 'ice-render:ICELayeredLayout' ? FakeLayout : null) };
+    (globalThis as any).__applySceneLayoutForTest = undefined;
+    // 直接调内部函数：DSL 的 runtime 只导出 renderDsl（要 canvas），这里走单测专用的导出
+    const { __applySceneLayout } = require('../src/runtime/renderDsl');
+    __applySceneLayout(ice, { layout: 'layered', layoutSpec: { type: 'ice-render:ICELayeredLayout', props: { gapX: 5, gapY: 6, direction: 'vertical' } } }, {});
+    expect(calls).toHaveLength(1);
+    expect(calls[0].props).toEqual({ gapX: 5, gapY: 6, direction: 'vertical' });
+    expect(calls[0].target).toBe(ice);
+  });
+});

@@ -1,6 +1,6 @@
 import { FLOW_NODE_KINDS, FlowNode } from 'ice-entity-designer';
 import type { DslBpmnDocument, DslBpmnEdge, DslBpmnNode, DslBpmnNodeKind } from '../types';
-import { layeredLayout } from './layout';
+import { buildLayeredLayoutSpec, layeredLayout } from './layout';
 
 export type CompiledBpmnNode = {
   id: string;
@@ -36,6 +36,8 @@ export type CompiledBpmnScene = {
   nodes: CompiledBpmnNode[];
   edges: CompiledBpmnEdge[];
   layout: string;
+  /** 布局意图（引擎布局描述符） */
+  layoutSpec?: import('./layout').DslLayoutSpec | null;
   options?: Record<string, any>;
 };
 
@@ -388,5 +390,13 @@ export function compileBpmnDsl(dsl: DslBpmnDocument): CompiledBpmnScene {
     return output;
   });
 
-  return { kind: 'bpmn', nodes: outputNodes, edges, layout, options };
+  return {
+    kind: 'bpmn',
+    nodes: outputNodes,
+    edges,
+    layout,
+    // BPMN 的自动布局是"每个容器内部各排一次"（原点是容器内容区左上角）
+    layoutSpec: buildLayeredLayoutSpec({ gapX: Number(options.gapX) || 90, gapY: Number(options.gapY) || 60, direction: 'horizontal' }),
+    options,
+  };
 }

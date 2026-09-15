@@ -1,10 +1,14 @@
 import { isFlowDsl } from '../types';
 import type { DslErDocument, DslEntity, DslRelation } from '../types';
+import { buildLayeredLayoutSpec } from './layout';
+import type { DslLayoutSpec } from './layout';
 
 export type CompiledScene = {
   entities: Array<Record<string, any>>;
   relations: Array<Record<string, any>>;
   layout?: string;
+  /** 布局意图（引擎布局描述符）：运行期照单执行（见 runtime/renderDsl.ts 的 applySceneLayout） */
+  layoutSpec?: DslLayoutSpec | null;
   options?: Record<string, any>;
 };
 
@@ -65,10 +69,20 @@ export function compileDsl(dsl: DslErDocument): CompiledScene {
     lineDash: relation.lineDash,
   }));
 
+  const layoutOptions: any = dsl.options || {};
   return {
     entities,
     relations,
     layout: dsl.layout,
+    // ER 的坐标不由编译器算，而是运行期排（见 runtime/renderDsl.ts）——
+    // 这里把"用什么排"随场景带出去，运行期照单执行（旧场景没有这个字段时走兼容分支）
+    layoutSpec:
+      dsl.layout
+        ? buildLayeredLayoutSpec({
+            gapX: Number(layoutOptions.gapX) || 120,
+            gapY: Number(layoutOptions.gapY) || 50,
+          })
+        : null,
     options: dsl.options,
   };
 }

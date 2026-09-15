@@ -1,5 +1,5 @@
 import type { DslStatechartDocument, DslStatechartEdge, DslStatechartNode, DslStatechartNodeKind } from '../types';
-import { layeredLayout } from './layout';
+import { buildLayeredLayoutSpec, layeredLayout } from './layout';
 
 export type CompiledStatechartNode = {
   id: string;
@@ -27,6 +27,8 @@ export type CompiledStatechartScene = {
   nodes: CompiledStatechartNode[];
   edges: CompiledStatechartEdge[];
   layout: string;
+  /** 布局意图（引擎布局描述符） */
+  layoutSpec?: import('./layout').DslLayoutSpec | null;
   options?: Record<string, any>;
 };
 
@@ -185,5 +187,12 @@ export function compileStatechartDsl(dsl: DslStatechartDocument): CompiledStatec
       .forEach((composite) => offsetChildren(composite, composite.left, composite.top));
   }
 
-  return { kind: 'statechart', nodes, edges, layout, options };
+  return {
+    kind: 'statechart',
+    nodes,
+    edges,
+    layout,
+    layoutSpec: buildLayeredLayoutSpec({ gapX: Number(options.gapX) || 110, gapY: Number(options.gapY) || 80, direction: 'horizontal' }),
+    options,
+  };
 }

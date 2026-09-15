@@ -38,6 +38,34 @@ export type LayoutOptions = {
   direction?: 'vertical' | 'horizontal';
 };
 
+/**
+ * 场景里的**布局意图**（引擎可直接构造的布局描述符）。
+ *
+ * 为什么要有它：编译期算坐标用的是"某套参数"，运行期如果自己另起一套（以前 ER 路径就是
+ * 硬编码 `new ICELayeredLayout({ gapX: 120, gapY: 50 })`），两边就会不一致。把意图随场景一起
+ * 输出后：① 运行期/再次自动布局照单执行，结果必然一致；② 存盘也带着策略（引擎 2.8 起
+ * 布局可序列化，`layout: { type, props }` 能往返）。
+ */
+export type DslLayoutSpec = {
+  /** 引擎注册表里的 canonical typeId（`ice.getType(typeId)` 可反查构造函数） */
+  type: string;
+  props: Record<string, any>;
+};
+
+export function buildLayeredLayoutSpec(options: LayoutOptions = {}): DslLayoutSpec {
+  const vertical = options.direction !== 'horizontal';
+  return {
+    type: 'ice-render:ICELayeredLayout',
+    props: {
+      // 引擎口径：gapX = 层间距、gapY = 层内间距（与编译器输入参数的方向约定相反，这里换算一次）
+      gapX: vertical ? Number(options.gapY) || 90 : Number(options.gapX) || 90,
+      gapY: vertical ? Number(options.gapX) || 90 : Number(options.gapY) || 90,
+      direction: vertical ? 'vertical' : 'horizontal',
+      crossAlign: 'center',
+    },
+  };
+}
+
 export function layeredLayout(
   items: LayoutItem[],
   edges: LayoutEdge[],

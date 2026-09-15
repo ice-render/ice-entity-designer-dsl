@@ -432,6 +432,26 @@ export function renderFlowDsl(canvasOrId: any, dsl: DslFlowDocument): RenderFlow
   return withDsl({ kind: 'flowchart', ice, designer });
 }
 
+/** 按场景里的**布局意图**排一次；旧场景（没有 layoutSpec）走历史上的 ER 默认参数。 */
+export function __applySceneLayout(ice: any, scene: any, options: any): void {
+  const spec = scene && scene.layoutSpec;
+  if (spec && spec.type) {
+    const Ctor = typeof ice.getType === 'function' ? ice.getType(spec.type) : null;
+    const manager = typeof Ctor === 'function' ? new Ctor(spec.props || {}) : null;
+    if (manager && typeof manager.layoutContainer === 'function') {
+      manager.layoutContainer(ice);
+      return;
+    }
+  }
+  // 兼容：引擎 2.9 之前编译出来的场景（只带 layout: 'layered' | 'horizontal'）
+  if (scene && (scene.layout === 'layered' || scene.layout === 'horizontal')) {
+    new ICELayeredLayout({
+      gapX: options.gapX || 120,
+      gapY: options.gapY || 50,
+    }).layoutContainer(ice);
+  }
+}
+
 function renderErDsl(canvasOrId: any, dsl: DslErDocument): RenderErDslResult {
   const scene = compileDsl(dsl);
   const options: any = scene.options || {};
@@ -446,12 +466,7 @@ function renderErDsl(canvasOrId: any, dsl: DslErDocument): RenderErDslResult {
     designer.createRelation(relation);
   });
 
-  if (scene.layout === 'layered' || scene.layout === 'horizontal') {
-    new ICELayeredLayout({
-      gapX: options.gapX || 120,
-      gapY: options.gapY || 50,
-    }).layoutContainer(ice);
-  }
+  __applySceneLayout(ice, scene, options);
 
   if (options.viewport) {
     ice.setViewport(options.viewport.scale, options.viewport.tx, options.viewport.ty);
