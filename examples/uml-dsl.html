@@ -96,86 +96,113 @@
     <script src="../dist/index.umd.js"></script>
     <script src="./canvas-interactions.js"></script>
     <script>
-      const textarea = document.getElementById('dsl');
+      /**
+       * UML 类图 DSL 示例页。
+       *
+       * 页面写法与家族其它示例一致：**一页 = 一个类**，构造期把 DOM 引用、事件与首次渲染一次做完。
+       * 这页的"变化"是**用户驱动**的（改 JSON 后点渲染 / 导出），不是宿主推数据，所以没有 `onUpdate()`。
+       */
+      class UmlDslPage {
+        constructor() {
+          this.textarea = document.getElementById('dsl');
+          this.__wireToolbar();
+          this.render();
+          window.__dslErrors = window.__dslResult.designer.validateUml();
+        }
 
-      /** 挂载交互：canvas 铺满可视区 + 滚轮缩放 + 空白/中键拖拽平移 */
-      function mount(result) {
-        window.__dslResult = result;
-        const canvas = document.getElementById('canvas');
-        window.__view = IedCanvasViewport.install({ ice: result.ice, canvas, designer: result.designer });
-        window.__view.fitViewport();
+        /** 渲染：换掉旧画布（引擎按 canvas 元素初始化，复用旧元素会叠两套） */
+        render() {
+          const oldCanvas = document.getElementById('canvas');
+          const nextCanvas = oldCanvas.cloneNode(false);
+          oldCanvas.parentNode.replaceChild(nextCanvas, oldCanvas);
+          try {
+            const result = ICEDSL.renderDsl('canvas', JSON.parse(this.textarea.value));
+            // 类图示例要跑的是 UML 校验（此前这里误写成了 validateBpmn）
+            window.__dslErrors = result.designer.validateUml();
+            this.mount(result);
+          } catch (error) {
+            alert(error.message);
+          }
+        }
+
+        /** 挂载交互：canvas 铺满可视区 + 滚轮缩放 + 空白/中键拖拽平移 */
+        mount(result) {
+          window.__dslResult = result;
+          const canvas = document.getElementById('canvas');
+          window.__view = IedCanvasViewport.install({ ice: result.ice, canvas, designer: result.designer });
+          window.__view.fitViewport();
+        }
+
+        fit() {
+          if (window.__view) window.__view.fitViewport();
+        }
+
+        reset() {
+          if (window.__view) window.__view.reset();
+        }
+
+        exportSvg() {
+          const result = window.__dslResult;
+          if (!result) {
+            return;
+          }
+          // 渲染出来的 designer 直接能导出矢量（与应用层同一套 API，DSL 不另造导出）
+          const svg = result.designer.toSvg({ padding: 16, background: '#ffffff' });
+          window.__exportedSvg = svg;
+          const blob = new Blob([svg], { type: 'image/svg+xml' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'uml-class-diagram.svg';
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+
+        exportText() {
+          const result = window.__dslResult;
+          if (!result) {
+            return;
+          }
+          // 文本互操作：类图文本可直接贴进 Wiki / Markdown / 代码评审
+          const text = IED.toPlantUml(result.designer, { title: 'DSL 生成的类图' });
+          window.__plantuml = text;
+          const blob = new Blob([text], { type: 'text/plain' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'uml-class-diagram.puml';
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+
+        /**
+         * 「导出当前文档」：把画布上（可能已被用户拖动 / 改名 / 分合过）的实例写回成同一份 DSL。
+         * 这就是 toDsl() 的往返：renderDsl() → 用户编辑 → toDsl()，导出的文档可以再渲染回去。
+         */
+        exportDoc(event) {
+          try {
+            const doc = window.__dslResult.toDsl();
+            document.getElementById('dsl').value = JSON.stringify(doc, null, 2);
+            const button = event.currentTarget;
+            const label = button.textContent;
+            button.textContent = '已导出到左侧';
+            setTimeout(() => (button.textContent = label), 1200);
+          } catch (error) {
+            alert(error.message);
+          }
+        }
+
+        __wireToolbar() {
+          document.getElementById('render').addEventListener('click', () => this.render());
+          document.getElementById('download-svg').addEventListener('click', () => this.exportSvg());
+          document.getElementById('download-text').addEventListener('click', () => this.exportText());
+          document.getElementById('fit').addEventListener('click', () => this.fit());
+          document.getElementById('reset').addEventListener('click', () => this.reset());
+          document.getElementById('export-doc').addEventListener('click', (event) => this.exportDoc(event));
+        }
       }
 
-      document.getElementById('render').addEventListener('click', () => {
-        const oldCanvas = document.getElementById('canvas');
-        const nextCanvas = oldCanvas.cloneNode(false);
-        oldCanvas.parentNode.replaceChild(nextCanvas, oldCanvas);
-        try {
-          const result = ICEDSL.renderDsl('canvas', JSON.parse(textarea.value));
-          // 类图示例要跑的是 UML 校验（此前这里误写成了 validateBpmn）
-          window.__dslErrors = result.designer.validateUml();
-          mount(result);
-        } catch (error) {
-          alert(error.message);
-        }
-      });
-      document.getElementById('download-svg').addEventListener('click', () => {
-        const result = window.__dslResult;
-        if (!result) {
-          return;
-        }
-        // 渲染出来的 designer 直接能导出矢量（与应用层同一套 API，DSL 不另造导出）
-        const svg = result.designer.toSvg({ padding: 16, background: '#ffffff' });
-        window.__exportedSvg = svg;
-        const blob = new Blob([svg], { type: 'image/svg+xml' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'uml-class-diagram.svg';
-        a.click();
-        URL.revokeObjectURL(url);
-      });
-
-      document.getElementById('download-text').addEventListener('click', () => {
-        const result = window.__dslResult;
-        if (!result) {
-          return;
-        }
-        // 文本互操作：类图文本可直接贴进 Wiki / Markdown / 代码评审
-        const text = IED.toPlantUml(result.designer, { title: 'DSL 生成的类图' });
-        window.__plantuml = text;
-        const blob = new Blob([text], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'uml-class-diagram.puml';
-        a.click();
-        URL.revokeObjectURL(url);
-      });
-
-      document.getElementById('fit').addEventListener('click', () => window.__view && window.__view.fitViewport());
-      document.getElementById('reset').addEventListener('click', () => window.__view && window.__view.reset());
-
-      mount(ICEDSL.renderDsl('canvas', JSON.parse(textarea.value)));
-      window.__dslErrors = window.__dslResult.designer.validateUml();
-    </script>
-    <script>
-      /**
-       * 「导出当前文档」：把画布上（可能已被用户拖动 / 改名 / 分合过）的实例写回成同一份 DSL。
-       * 这就是 toDsl() 的往返：renderDsl() → 用户编辑 → toDsl()，导出的文档可以再渲染回去。
-       */
-      document.getElementById('export-doc').addEventListener('click', (event) => {
-        try {
-          const doc = window.__dslResult.toDsl();
-          document.getElementById('dsl').value = JSON.stringify(doc, null, 2);
-          const button = event.currentTarget;
-          const label = button.textContent;
-          button.textContent = '已导出到左侧';
-          setTimeout(() => (button.textContent = label), 1200);
-        } catch (error) {
-          alert(error.message);
-        }
-      });
+      new UmlDslPage();
     </script>
 
   </body>
