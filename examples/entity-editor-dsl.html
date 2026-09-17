@@ -129,18 +129,18 @@
        * 实体关系 DSL 示例页。
        *
        * 页面写法与家族其它示例一致：**一页 = 一个类**，构造期把 DOM 引用、事件与首次渲染一次做完。
-       * 这页的"变化"是**用户驱动**的（改 JSON 后点渲染 / 导出），不是宿主推数据，所以没有 `onUpdate()`。
+       * 这页的"变化"是**用户驱动**的（改 JSON 后点渲染 / 导出），不是宿主推数据，所以刷新入口就是 `onUpdate()`（按钮点它重渲）。
        */
       class EntityEditorDslPage {
         constructor() {
           this.textarea = document.getElementById('dsl');
-          document.getElementById('render').addEventListener('click', () => this.render());
+          document.getElementById('render').addEventListener('click', () => this.onUpdate());
           document.getElementById('export-doc').addEventListener('click', (event) => this.exportDoc(event));
-          this.render();
+          this.onUpdate();
         }
 
         /** 渲染：换掉旧画布（引擎按 canvas 元素初始化，复用旧元素会叠两套） */
-        render() {
+        onUpdate() {
           const oldCanvas = document.getElementById('canvas');
           const nextCanvas = oldCanvas.cloneNode(false);
           oldCanvas.parentNode.replaceChild(nextCanvas, oldCanvas);
