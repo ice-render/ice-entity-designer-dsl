@@ -46,11 +46,13 @@ The package contains:
 npm install ice-entity-designer-dsl
 ```
 
-This installs `ice-entity-designer` as well (the DSL runtime renders through it). The engine
-(`ice-render`) is a **peer dependency** of both packages and stays **external** in the UMD builds
-(`globals: { 'ice-render': 'ICE' }` / `{ 'ice-entity-designer': 'IED' }`), so a plain `<script>`
-page must load the three UMDs **in this order**: `ice-render` → `ice-entity-designer` → `dist/index.umd.js`
-— see below.
+`ice-entity-designer`（DSL 的渲染目标）与引擎 `ice-render` 都是本包的 **peer dependency**：
+两者在 UMD 产物里同样是 **external**（`globals: { 'ice-render': 'ICE' }` /
+`{ 'ice-entity-designer': 'IED' }`），由宿主提供 —— 所以一个纯 `<script>` 页面必须**按这个顺序**
+加载三份 UMD：`ice-render` → `ice-entity-designer` → `dist/index.umd.js`（见下）。
+
+> npm 7+ 会自动装 peer 依赖，`npm install ice-entity-designer-dsl` 依旧一次装齐；
+> 区别是**版本由宿主决定**（不会再嵌一份旧副本，避免两个 designer 实例/类身份不一致）。
 
 ## Browser usage
 
