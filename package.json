@@ -1,6 +1,6 @@
 {
   "name": "ice-entity-designer-dsl",
-  "version": "0.0.35",
+  "version": "0.0.36",
   "description": "A JSON-first DSL layer for AI agents to drive ice-entity-designer.",
   "repository": {
     "type": "git",
@@ -39,8 +39,8 @@
     "@types/node": "18.19.130",
     "babel-jest": "29.7.0",
     "http-server": "^14.1.1",
-    "ice-entity-designer": "^0.10.0",
-    "ice-render": "^4.0.0",
+    "ice-entity-designer": "^0.11.0",
+    "ice-render": "^4.1.0",
     "jest": "29.7.0",
     "rimraf": "5.0.10",
     "rollup": "3.29.5",
@@ -51,7 +51,7 @@
     "npm": ">=9"
   },
   "peerDependencies": {
-    "ice-entity-designer": "^0.10.0",
-    "ice-render": "^4.0.0"
+    "ice-entity-designer": "^0.11.0",
+    "ice-render": "^4.1.0"
   }
 }
