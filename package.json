@@ -22,6 +22,7 @@
     "test": "jest --runInBand",
     "types:check": "tsc --noEmit",
     "verify": "npm run types:check && npm test && npm run build",
+    "prepublishOnly": "npm run verify",
     "test:e2e": "npm run build && playwright test",
     "verify:full": "npm run verify && npm run test:e2e"
   },
