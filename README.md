@@ -2,6 +2,8 @@
 
 JSON-first DSL for AI agents to drive `ice-entity-designer` without learning the imperative canvas API.
 
+> Changelog: [CHANGELOG.md](./CHANGELOG.md).
+
 One JSON DSL, seven document kinds — the same document drives rendering, validation and export:
 
 - **ER document** (`entities` / `relations`): entity-relation models and database schemas.
