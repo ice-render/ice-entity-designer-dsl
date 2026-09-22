@@ -1217,8 +1217,8 @@ without notice). Same rule as ice-render's `ICE_ERROR_CODES` for engine errors �
 ### Runtime requirements
 
 - Node: install `ice-entity-designer-dsl@>=0.0.19`.
-  `ice-entity-designer@^0.2.0` and `ice-render@^2.0.0` are peer dependencies
-  (npm 7+ installs peers automatically)；家族当前引擎为 `2.2.0`，建议直接装最新。
+  `ice-entity-designer@^0.12.2` and `ice-render@^4.2.0` are peer dependencies
+  (npm 7+ installs peers automatically)；家族当前引擎为 `4.3.0`，建议直接装最新。
 - Browser: load `ice-render`, then `ice-entity-designer`, then
   `ice-entity-designer-dsl`.
 
