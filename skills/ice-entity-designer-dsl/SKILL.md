@@ -1,7 +1,7 @@
 ---
 name: ice-entity-designer-dsl
 description: Generate and round-trip JSON-first DSL documents (ER models, flowcharts, BPMN 2.0 processes, UML class diagrams, statecharts, gantt schedules, power one-line diagrams) for ice-entity-designer — render them into editable instances and read user edits back with toDsl(). For interactive editor demos or pages, route to ice-entity-designer instead.
-version: "1.5.1"
+version: "1.5.2"
 category: data
 platforms:
   - claude-code
